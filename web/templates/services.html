@@ -1,254 +1,406 @@
 {{template "layout" .}}
 
 {{define "content"}}
-<div class="space-y-6">
-  <!-- Header -->
-  <div>
-    <h2 class="text-base font-bold text-slate-100">Service Manager & Package Installer</h2>
-    <p class="text-xs text-slate-400 mt-0.5">Control FreeBSD daemons (rc.d) and install software stacks via FreeBSD pkg</p>
-  </div>
-
-  <!-- Web Servers Management Section -->
-  <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
-    <div class="p-4 border-b border-slate-700/60 bg-dark-850 flex items-center justify-between">
-      <div>
-        <h3 class="text-sm font-bold text-slate-100">Web Servers Stack</h3>
-        <p class="text-xs text-slate-400 mt-0.5">Manage and monitor running HTTP daemons</p>
-      </div>
+<div class="space-y-4">
+  <!-- Top Bar: Title & Overview -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div>
+      <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+        <i data-lucide="layers" class="w-5 h-5 text-sky-400"></i>
+        <span>Services & Software Stack</span>
+      </h2>
+      <p class="text-xs text-slate-400 mt-0.5">Control FreeBSD daemons (rc.d) and manage software stacks via FreeBSD pkg</p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
-      <!-- Nginx -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-4 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-bold text-slate-100">Nginx</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
-          </div>
-          <p class="text-xs text-slate-400">Reverse proxy & static web server</p>
-        </div>
-        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700/60">
-          <button onclick="controlService('nginx', 'restart')" class="flex-1 px-2.5 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition-all cursor-pointer">Restart</button>
-          <button onclick="controlService('nginx', 'reload')" class="flex-1 px-2.5 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition-all cursor-pointer">Reload</button>
-        </div>
+    <!-- Quick Refresh Button -->
+    <div class="flex items-center gap-2">
+      <button onclick="refreshServicesList()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-sky-400" id="refreshIcon"></i>
+        <span>Refresh Status</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter & Search Toolbar -->
+  <div class="bg-dark-800 border border-slate-700/60 rounded-xl p-3.5 shadow-sm space-y-3">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <!-- Category Filter Tabs -->
+      <div class="flex items-center gap-1.5 overflow-x-auto text-xs py-0.5" id="categoryFilterTabs">
+        <button onclick="filterCategory('all')" id="tab-all" class="px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-sky-600 text-white shadow-sm">
+          Semua Service (<span id="count-all">0</span>)
+        </button>
+        <button onclick="filterCategory('Web Server')" id="tab-web" class="px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-dark-900 hover:bg-slate-700 text-slate-300 border border-slate-700">
+          Web Server (<span id="count-web">0</span>)
+        </button>
+        <button onclick="filterCategory('PHP Engine')" id="tab-php" class="px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-dark-900 hover:bg-slate-700 text-slate-300 border border-slate-700">
+          PHP Engine (<span id="count-php">0</span>)
+        </button>
+        <button onclick="filterCategory('Database')" id="tab-db" class="px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-dark-900 hover:bg-slate-700 text-slate-300 border border-slate-700">
+          Database (<span id="count-db">0</span>)
+        </button>
+        <button onclick="filterCategory('Security')" id="tab-sec" class="px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-dark-900 hover:bg-slate-700 text-slate-300 border border-slate-700">
+          Security & Firewall (<span id="count-sec">0</span>)
+        </button>
       </div>
 
-      <!-- Apache -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-4 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-bold text-slate-100">Apache 2.4</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-dark-900 border border-slate-700 text-slate-400">Installed</span>
-          </div>
-          <p class="text-xs text-slate-400">Standard web server with mod_rewrite</p>
-        </div>
-        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700/60">
-          <button onclick="controlService('apache24', 'start')" class="flex-1 px-2.5 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition-all cursor-pointer">Start</button>
-          <button onclick="controlService('apache24', 'stop')" class="flex-1 px-2.5 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition-all cursor-pointer">Stop</button>
-        </div>
-      </div>
-
-      <!-- Caddy -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-4 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-bold text-slate-100">Caddy Server</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-dark-900 border border-slate-700 text-slate-400">Optional</span>
-          </div>
-          <p class="text-xs text-slate-400">Automatic HTTPS and zero-config TLS</p>
-        </div>
-        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700/60">
-          <button onclick="controlService('caddy', 'start')" class="w-full px-2.5 py-1.5 rounded-md bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white transition-all cursor-pointer">Enable Service</button>
-        </div>
-      </div>
-
-      <!-- OpenLiteSpeed -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-4 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-bold text-slate-100">LiteSpeed</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-dark-900 border border-slate-700 text-slate-400">Optional</span>
-          </div>
-          <p class="text-xs text-slate-400">High-performance event cache engine</p>
-        </div>
-        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700/60">
-          <button onclick="controlService('openlitespeed', 'start')" class="w-full px-2.5 py-1.5 rounded-md bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white transition-all cursor-pointer">Enable Service</button>
-        </div>
+      <!-- Search Box -->
+      <div class="relative flex items-center" style="max-width: 280px; width: 100%;">
+        <span class="text-slate-400" style="position: absolute; left: 10px; pointer-events: none; display: flex; align-items: center;">
+          <i data-lucide="search" class="w-3.5 h-3.5"></i>
+        </span>
+        <input type="text" id="serviceSearchInput" oninput="applyFilters()" placeholder="Cari nama service..." style="padding-left: 32px; padding-right: 28px;" class="w-full py-1.5 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono">
+        <button id="clearSearchBtn" onclick="clearSearch()" class="hidden text-slate-400 hover:text-slate-200" style="position: absolute; right: 10px; cursor: pointer; background: transparent;">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Multi-Version PHP Engine Section -->
+  <!-- Services Table Card -->
   <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
-    <div class="p-4 border-b border-slate-700/60 bg-dark-850">
-      <h3 class="text-sm font-bold text-slate-100">Multi-Version PHP Engines (FreeBSD Ports/Pkg)</h3>
-      <p class="text-xs text-slate-400 mt-0.5">Isolated PHP-FPM pools for each virtual host</p>
-    </div>
-
-    <div class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- PHP 8.2 -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-3.5 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-bold text-slate-100 font-mono">PHP 8.2</span>
-            <span class="px-2 py-0.5 rounded text-[10px] bg-dark-900 border border-slate-700 text-slate-300 font-mono">Ready</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Exts: mysqli, pgsql, curl, gd, mbstring</p>
-        </div>
-        <button onclick="controlService('php82-fpm', 'restart')" class="w-full px-2 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs transition-all cursor-pointer">Restart FPM</button>
-      </div>
-
-      <!-- PHP 8.3 -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-3.5 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-bold text-slate-100 font-mono">PHP 8.3 (Default)</span>
-            <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">Running</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Exts: mysqli, pgsql, curl, gd, zip, intl</p>
-        </div>
-        <button onclick="controlService('php83-fpm', 'restart')" class="w-full px-2 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs transition-all cursor-pointer">Restart FPM</button>
-      </div>
-
-      <!-- PHP 8.4 -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-3.5 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-bold text-slate-100 font-mono">PHP 8.4</span>
-            <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">Running</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Exts: mysqli, pgsql, curl, gd, opcache</p>
-        </div>
-        <button onclick="controlService('php84-fpm', 'restart')" class="w-full px-2 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs transition-all cursor-pointer">Restart FPM</button>
-      </div>
-
-      <!-- PHP 8.5 -->
-      <div class="bg-dark-850 border border-slate-700/60 rounded-lg p-3.5 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-bold text-slate-100 font-mono">PHP 8.5</span>
-            <span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">Preview</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Experimental builds from FreeBSD Ports</p>
-        </div>
-        <button onclick="controlService('php85-fpm', 'restart')" class="w-full px-2 py-1.5 rounded-md bg-dark-900 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs transition-all cursor-pointer">Restart FPM</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- One-Click Software Stack Installer -->
-  <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
-    <div class="p-4 border-b border-slate-700/60 bg-dark-850">
-      <h3 class="text-sm font-bold text-slate-100">One-Click FreeBSD Package Installer</h3>
-      <p class="text-xs text-slate-400 mt-0.5">Install hosting components with complete dependencies via FreeBSD pkg</p>
-    </div>
-
-    <div class="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
-      <button onclick="installPackage('nginx')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>Nginx Server</span>
-          <i data-lucide="server" class="w-3.5 h-3.5 text-sky-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">High-perf reverse proxy</div>
-      </button>
-
-      <button onclick="installPackage('apache')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>Apache 2.4</span>
-          <i data-lucide="layers" class="w-3.5 h-3.5 text-sky-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">Full .htaccess support</div>
-      </button>
-
-      <button onclick="installPackage('mariadb')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>MariaDB Server</span>
-          <i data-lucide="database" class="w-3.5 h-3.5 text-emerald-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">MySQL-compatible SQL engine</div>
-      </button>
-
-      <button onclick="installPackage('postgresql')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>PostgreSQL</span>
-          <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">Enterprise SQL database</div>
-      </button>
-
-      <button onclick="installPackage('php83')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>PHP 8.3 Stack</span>
-          <i data-lucide="cpu" class="w-3.5 h-3.5 text-sky-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">Core + MySQL/Curl/GD exts</div>
-      </button>
-
-      <button onclick="installPackage('php84')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>PHP 8.4 Stack</span>
-          <i data-lucide="cpu" class="w-3.5 h-3.5 text-sky-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">Latest PHP release & exts</div>
-      </button>
-
-      <button onclick="installPackage('phpmyadmin')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>phpMyAdmin</span>
-          <i data-lucide="external-link" class="w-3.5 h-3.5 text-amber-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">Web MySQL GUI manager</div>
-      </button>
-
-      <button onclick="installPackage('caddy')" class="p-3.5 bg-dark-850 border border-slate-700/60 rounded-lg hover:border-sky-500/50 hover:bg-dark-750 text-left transition-all cursor-pointer">
-        <div class="font-bold text-slate-100 flex items-center justify-between">
-          <span>Caddy Server</span>
-          <i data-lucide="shield" class="w-3.5 h-3.5 text-emerald-400"></i>
-        </div>
-        <div class="text-[11px] text-slate-400 mt-1">Automatic TLS server</div>
-      </button>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-300 font-semibold uppercase tracking-wider text-[11px]">
+          <tr>
+            <th class="px-4 py-3.5">Nama Service</th>
+            <th class="px-4 py-3.5">Kategori</th>
+            <th class="px-4 py-3.5">Status</th>
+            <th class="px-4 py-3.5 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody id="servicesTableBody" class="divide-y divide-slate-700/40 text-slate-300">
+          <tr>
+            <td colspan="4" class="px-4 py-8 text-center text-slate-400">
+              <div class="flex items-center justify-center gap-2">
+                <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin text-sky-400"></i>
+                <span>Memuat daftar service FreeBSD...</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
 
+<!-- Floating Toast Notification -->
+<div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
 <script>
-async function controlService(service, action) {
+let servicesData = [];
+let currentCategory = 'all';
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadServices();
+});
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl border text-xs font-medium shadow-xl flex items-center gap-2.5 transition-all transform duration-200 translate-y-2 opacity-0 ${
+    type === 'success' ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200' :
+    type === 'error' ? 'bg-rose-950/90 border-rose-500/50 text-rose-200' :
+    'bg-dark-800/95 border-slate-700 text-slate-200'
+  }`;
+
+  const iconName = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-triangle' : 'check');
+  toast.innerHTML = `
+    <i data-lucide="${iconName}" class="w-4 h-4 flex-shrink-0"></i>
+    <span>${message}</span>
+  `;
+  container.appendChild(toast);
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'translate-y-2');
+    setTimeout(() => toast.remove(), 250);
+  }, 3500);
+}
+
+async function loadServices() {
+  try {
+    const res = await fetch('/api/services');
+    if (!res.ok) throw new Error('Gagal memuat service');
+    servicesData = await res.json();
+    updateCounts();
+    applyFilters();
+  } catch (err) {
+    const tbody = document.getElementById('servicesTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-rose-400 font-mono">Error memuat service: ${err.message}</td></tr>`;
+  }
+}
+
+async function refreshServicesList() {
+  const icon = document.getElementById('refreshIcon');
+  if (icon) icon.classList.add('animate-spin');
+  await loadServices();
+  if (icon) icon.classList.remove('animate-spin');
+  showToast('Status service berhasil diperbarui!', 'success');
+}
+
+function updateCounts() {
+  document.getElementById('count-all').textContent = servicesData.length;
+  document.getElementById('count-web').textContent = servicesData.filter(s => s.category === 'Web Server').length;
+  document.getElementById('count-php').textContent = servicesData.filter(s => s.category === 'PHP Engine').length;
+  document.getElementById('count-db').textContent = servicesData.filter(s => s.category === 'Database').length;
+  document.getElementById('count-sec').textContent = servicesData.filter(s => s.category === 'Security').length;
+}
+
+function filterCategory(cat) {
+  currentCategory = cat;
+
+  const tabs = {
+    'all': 'tab-all',
+    'Web Server': 'tab-web',
+    'PHP Engine': 'tab-php',
+    'Database': 'tab-db',
+    'Security': 'tab-sec'
+  };
+
+  Object.keys(tabs).forEach(k => {
+    const btn = document.getElementById(tabs[k]);
+    if (!btn) return;
+    if (k === cat) {
+      btn.className = 'px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-sky-600 text-white shadow-sm';
+    } else {
+      btn.className = 'px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer bg-dark-900 hover:bg-slate-700 text-slate-300 border border-slate-700';
+    }
+  });
+
+  applyFilters();
+}
+
+function clearSearch() {
+  document.getElementById('serviceSearchInput').value = '';
+  document.getElementById('clearSearchBtn').classList.add('hidden');
+  applyFilters();
+}
+
+function applyFilters() {
+  const keyword = (document.getElementById('serviceSearchInput').value || '').toLowerCase().trim();
+  const clearBtn = document.getElementById('clearSearchBtn');
+  if (keyword) {
+    clearBtn.classList.remove('hidden');
+  } else {
+    clearBtn.classList.add('hidden');
+  }
+
+  const filtered = servicesData.filter(item => {
+    const matchCat = (currentCategory === 'all' || item.category === currentCategory);
+    const matchSearch = item.name.toLowerCase().includes(keyword) ||
+                        item.service_name.toLowerCase().includes(keyword) ||
+                        item.description.toLowerCase().includes(keyword);
+    return matchCat && matchSearch;
+  });
+
+  renderTable(filtered);
+}
+
+function getServiceIcon(item) {
+  switch (item.category) {
+    case 'Web Server':
+      return { icon: 'server', color: 'text-sky-400' };
+    case 'PHP Engine':
+      return { icon: 'cpu', color: 'text-emerald-400' };
+    case 'Database':
+      return { icon: 'database', color: 'text-indigo-400' };
+    case 'Security':
+      return { icon: 'shield', color: 'text-amber-400' };
+    default:
+      return { icon: 'layers', color: 'text-slate-400' };
+  }
+}
+
+function renderTable(items) {
+  const tbody = document.getElementById('servicesTableBody');
+  tbody.innerHTML = '';
+
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400 font-mono">Tidak ada service yang cocok dengan pencarian.</td></tr>';
+    return;
+  }
+
+  items.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-dark-750 transition-all';
+
+    const { icon, color } = getServiceIcon(item);
+
+    // Status badges
+    let statusBadge = '';
+    if (!item.is_installed) {
+      statusBadge = `<span class="px-2 py-0.5 rounded text-[11px] font-medium bg-dark-900 border border-slate-700 text-slate-400">Belum Terinstall</span>`;
+    } else if (item.is_running) {
+      statusBadge = `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Running</span>
+        </span>
+      `;
+    } else {
+      statusBadge = `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-dark-900 border border-slate-700 text-slate-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+          <span>Stopped</span>
+        </span>
+      `;
+    }
+
+    // Category badge
+    const catBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-dark-900 border border-slate-700 text-slate-300">${item.category}</span>`;
+
+    // Action Buttons
+    let actionsHtml = '';
+    if (!item.is_installed) {
+      actionsHtml = `
+        <button onclick="installService('${item.id}', '${item.pkg_name}', '${item.service_name}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-all cursor-pointer shadow-sm">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Install</span>
+        </button>
+      `;
+    } else {
+      actionsHtml = `
+        <div class="inline-flex items-center gap-1.5">
+          <!-- Start Button -->
+          <button onclick="executeServiceAction('${item.service_name}', 'start')" title="Start Service" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            <span>Start</span>
+          </button>
+
+          <!-- Reload Button -->
+          <button onclick="executeServiceAction('${item.service_name}', 'reload')" title="Reload Configuration" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Reload</span>
+          </button>
+
+          <!-- Stop Button -->
+          <button onclick="executeServiceAction('${item.service_name}', 'stop')" title="Stop Service" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+            <i data-lucide="square" class="w-3.5 h-3.5"></i>
+            <span>Stop</span>
+          </button>
+
+          <!-- Uninstall Button (if not base system component) -->
+          ${!item.is_base ? `
+            <button onclick="uninstallService('${item.id}', '${item.pkg_name}', '${item.service_name}', '${item.name}')" title="Uninstall Service" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              <span>Uninstall</span>
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    tr.innerHTML = `
+      <td class="px-4 py-3 font-medium text-slate-100">
+        <div class="flex items-start gap-3">
+          <div class="p-2 rounded-lg bg-dark-950 border border-slate-800 flex-shrink-0 mt-0.5">
+            <i data-lucide="${icon}" class="w-4 h-4 ${color}"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-slate-100">${item.name}</span>
+              <span class="text-[10px] font-mono text-slate-400">(${item.service_name})</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5 max-w-md">${item.description}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        ${catBadge}
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        ${statusBadge}
+      </td>
+      <td class="px-4 py-3 text-right whitespace-nowrap">
+        ${actionsHtml}
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+// ==========================================
+// ACTION HANDLERS
+// ==========================================
+
+async function executeServiceAction(serviceName, action) {
+  const actionLabels = {
+    'start': 'menjalankan (start)',
+    'stop': 'menghentikan (stop)',
+    'reload': 'mereload konfigurasi',
+    'restart': 'merestart'
+  };
+
+  showToast(`Sedang ${actionLabels[action] || action} service '${serviceName}'...`, 'info');
+
   try {
     const res = await fetch('/api/services/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ service, action })
+      body: JSON.stringify({ service: serviceName, action: action })
     });
+
     if (res.ok) {
-      alert(`Service ${service} action '${action}' completed!`);
-      window.location.reload();
+      showToast(`Service '${serviceName}' berhasil di-${action}!`, 'success');
+      await loadServices();
     } else {
       const err = await res.text();
-      alert(`Action failed: ${err}`);
+      showToast(`Gagal ${action} '${serviceName}': ${err}`, 'error');
     }
-  } catch (e) {
-    alert('Network error: ' + e);
+  } catch (err) {
+    showToast(`Network error: ${err}`, 'error');
   }
 }
 
-async function installPackage(pkgName) {
-  if (!confirm(`Are you sure you want to install ${pkgName} on FreeBSD?`)) return;
-  alert(`Starting FreeBSD pkg installation for ${pkgName}. This may take a minute...`);
+async function installService(pkgId, pkgName, serviceName) {
+  if (!confirm(`Apakah Anda yakin ingin menginstall package '${pkgName || pkgId}' via FreeBSD pkg?`)) return;
+
+  showToast(`Sedang menginstall '${pkgName || pkgId}' via FreeBSD pkg (proses membutuhkan waktu)...`, 'info');
+
   try {
     const res = await fetch('/api/services/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package: pkgName })
+      body: JSON.stringify({ package: pkgId, service: serviceName })
     });
+
     if (res.ok) {
-      alert(`Package ${pkgName} installed successfully!`);
-      window.location.reload();
+      showToast(`Package '${pkgName || pkgId}' berhasil diinstall!`, 'success');
+      await loadServices();
     } else {
       const err = await res.text();
-      alert(`Installation failed: ${err}`);
+      showToast(`Gagal menginstall: ${err}`, 'error');
     }
-  } catch (e) {
-    alert('Network error: ' + e);
+  } catch (err) {
+    showToast(`Network error: ${err}`, 'error');
+  }
+}
+
+async function uninstallService(pkgId, pkgName, serviceName, displayName) {
+  if (!confirm(`PERINGATAN: Apakah Anda yakin ingin meng-uninstall '${displayName || pkgId}'?\nService akan dihentikan dan dinonaktifkan dari sistem FreeBSD.`)) return;
+
+  showToast(`Sedang meng-uninstall '${displayName}'...`, 'info');
+
+  try {
+    const res = await fetch('/api/services/uninstall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package: pkgId, service: serviceName })
+    });
+
+    if (res.ok) {
+      showToast(`'${displayName}' berhasil di-uninstall!`, 'success');
+      await loadServices();
+    } else {
+      const err = await res.text();
+      showToast(`Gagal meng-uninstall: ${err}`, 'error');
+    }
+  } catch (err) {
+    showToast(`Network error: ${err}`, 'error');
   }
 }
 </script>

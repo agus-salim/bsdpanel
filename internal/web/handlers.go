@@ -122,20 +122,218 @@ func (s *Server) handleSitesPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "sites.html", data)
 }
 
-// handleServicesPage renders services management view.
-func (s *Server) handleServicesPage(w http.ResponseWriter, r *http.Request) {
-	serviceNames := []string{"nginx", "apache24", "caddy", "mysql-server", "postgresql", "pf"}
-	statuses := make(map[string]interface{})
+// ServiceItem represents a FreeBSD system daemon or hosting stack component.
+type ServiceItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ServiceName string `json:"service_name"`
+	PkgName     string `json:"pkg_name"`
+	Category    string `json:"category"`
+	Description string `json:"description"`
+	IsInstalled bool   `json:"is_installed"`
+	IsRunning   bool   `json:"is_running"`
+	IsEnabled   bool   `json:"is_enabled"`
+	IsBase      bool   `json:"is_base"`
+}
 
-	for _, name := range serviceNames {
-		st, _ := s.serviceMgr.Status(r.Context(), name)
-		statuses[name] = st
+func (s *Server) isServiceInstalled(ctx context.Context, item ServiceItem) bool {
+	if item.IsBase {
+		return true
+	}
+	if item.ServiceName != "" {
+		if _, err := os.Stat(filepath.Join("/usr/local/etc/rc.d", item.ServiceName)); err == nil {
+			return true
+		}
+		if _, err := os.Stat(filepath.Join("/etc/rc.d", item.ServiceName)); err == nil {
+			return true
+		}
+	}
+	switch item.ID {
+	case "nginx":
+		if _, err := os.Stat("/usr/local/sbin/nginx"); err == nil {
+			return true
+		}
+	case "apache24", "apache":
+		if _, err := os.Stat("/usr/local/sbin/httpd"); err == nil {
+			return true
+		}
+	case "caddy":
+		if _, err := os.Stat("/usr/local/bin/caddy"); err == nil {
+			return true
+		}
+	case "openlitespeed":
+		if _, err := os.Stat("/usr/local/lsws/bin/openlitespeed"); err == nil {
+			return true
+		}
+	case "php82":
+		if _, err := os.Stat("/usr/local/bin/php82"); err == nil {
+			return true
+		}
+	case "php83":
+		if _, err := os.Stat("/usr/local/bin/php83"); err == nil {
+			return true
+		}
+	case "php84":
+		if _, err := os.Stat("/usr/local/bin/php84"); err == nil {
+			return true
+		}
+	case "php85":
+		if _, err := os.Stat("/usr/local/bin/php85"); err == nil {
+			return true
+		}
+	case "mariadb":
+		if _, err := os.Stat("/usr/local/libexec/mariadbd"); err == nil {
+			return true
+		}
+		if _, err := os.Stat("/usr/local/bin/mariadb"); err == nil {
+			return true
+		}
+	case "postgresql":
+		if _, err := os.Stat("/usr/local/bin/postgres"); err == nil {
+			return true
+		}
+	case "fail2ban":
+		if _, err := os.Stat("/usr/local/bin/fail2ban-client"); err == nil {
+			return true
+		}
+	}
+	if item.PkgName != "" && s.pkgMgr.IsInstalled(ctx, item.PkgName) {
+		return true
+	}
+	return false
+}
+
+func (s *Server) getServicesCatalog(ctx context.Context) []ServiceItem {
+	items := []ServiceItem{
+		// Web Servers
+		{
+			ID:          "nginx",
+			Name:        "Nginx",
+			ServiceName: "nginx",
+			PkgName:     "nginx",
+			Category:    "Web Server",
+			Description: "High-performance HTTP reverse proxy and static server",
+		},
+		{
+			ID:          "apache24",
+			Name:        "Apache 2.4",
+			ServiceName: "apache24",
+			PkgName:     "apache24",
+			Category:    "Web Server",
+			Description: "Standard HTTP server with full .htaccess rewrite support",
+		},
+		{
+			ID:          "caddy",
+			Name:        "Caddy Server",
+			ServiceName: "caddy",
+			PkgName:     "caddy",
+			Category:    "Web Server",
+			Description: "Modern web server with automatic HTTPS and zero-config TLS",
+		},
+		{
+			ID:          "openlitespeed",
+			Name:        "OpenLiteSpeed",
+			ServiceName: "openlitespeed",
+			PkgName:     "openlitespeed",
+			Category:    "Web Server",
+			Description: "High-performance event-driven HTTP caching server",
+		},
+		// PHP Engines
+		{
+			ID:          "php82",
+			Name:        "PHP 8.2-FPM",
+			ServiceName: "php-fpm",
+			PkgName:     "php82",
+			Category:    "PHP Engine",
+			Description: "FastCGI Process Manager for PHP 8.2 with core extensions",
+		},
+		{
+			ID:          "php83",
+			Name:        "PHP 8.3-FPM",
+			ServiceName: "php-fpm",
+			PkgName:     "php83",
+			Category:    "PHP Engine",
+			Description: "Default FastCGI Process Manager for PHP 8.3 with core extensions",
+		},
+		{
+			ID:          "php84",
+			Name:        "PHP 8.4-FPM",
+			ServiceName: "php-fpm",
+			PkgName:     "php84",
+			Category:    "PHP Engine",
+			Description: "FastCGI Process Manager for PHP 8.4 with core extensions",
+		},
+		{
+			ID:          "php85",
+			Name:        "PHP 8.5-FPM",
+			ServiceName: "php-fpm",
+			PkgName:     "php85",
+			Category:    "PHP Engine",
+			Description: "Experimental PHP 8.5 builds from FreeBSD Ports",
+		},
+		// Databases
+		{
+			ID:          "mariadb",
+			Name:        "MariaDB Server",
+			ServiceName: "mysql-server",
+			PkgName:     "mariadb1011-server",
+			Category:    "Database",
+			Description: "MySQL-compatible high-performance relational database",
+		},
+		{
+			ID:          "postgresql",
+			Name:        "PostgreSQL 16",
+			ServiceName: "postgresql",
+			PkgName:     "postgresql16-server",
+			Category:    "Database",
+			Description: "Enterprise-grade ACID-compliant SQL database",
+		},
+		// Security
+		{
+			ID:          "pf",
+			Name:        "PF (Packet Filter)",
+			ServiceName: "pf",
+			PkgName:     "",
+			Category:    "Security",
+			Description: "FreeBSD kernel packet filtering firewall & NAT subsystem",
+			IsBase:      true,
+		},
+		{
+			ID:          "fail2ban",
+			Name:        "Fail2ban",
+			ServiceName: "fail2ban",
+			PkgName:     "fail2ban",
+			Category:    "Security",
+			Description: "Intrusion prevention daemon to ban brute-force SSH/HTTP IP attacks",
+		},
 	}
 
+	for i := range items {
+		item := &items[i]
+		item.IsInstalled = s.isServiceInstalled(ctx, *item)
+
+		if item.ID == "pf" {
+			item.IsRunning = s.firewallMgr.IsPFActive(ctx)
+			item.IsEnabled = s.serviceMgr.IsEnabled(ctx, "pf")
+		} else {
+			st, err := s.serviceMgr.Status(ctx, item.ServiceName)
+			if err == nil && st != nil {
+				item.IsRunning = st.IsRunning
+				item.IsEnabled = st.IsEnabled
+			}
+		}
+	}
+
+	return items
+}
+
+// handleServicesPage renders services management view.
+func (s *Server) handleServicesPage(w http.ResponseWriter, r *http.Request) {
+	services := s.getServicesCatalog(r.Context())
 	data := map[string]interface{}{
-		"Title":     "Service & Package Manager",
+		"Title":     "Services & Stack",
 		"ActiveNav": "services",
-		"Services":  statuses,
+		"Services":  services,
 	}
 	s.render(w, "services.html", data)
 }
@@ -313,13 +511,8 @@ func (s *Server) handleAPISiteSSL(w http.ResponseWriter, r *http.Request) {
 // handleAPIServices returns status or triggers service actions.
 func (s *Server) handleAPIServices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	svcs := []string{"nginx", "apache24", "caddy", "mysql-server", "postgresql", "pf"}
-	res := make(map[string]interface{})
-	for _, sv := range svcs {
-		st, _ := s.serviceMgr.Status(r.Context(), sv)
-		res[sv] = st
-	}
-	_ = json.NewEncoder(w).Encode(res)
+	catalog := s.getServicesCatalog(r.Context())
+	_ = json.NewEncoder(w).Encode(catalog)
 }
 
 // handleAPIServiceAction starts, stops, or restarts a service.
@@ -339,23 +532,52 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var err error
-	switch req.Action {
-	case "start":
-		err = s.serviceMgr.Start(r.Context(), req.Service)
-	case "stop":
-		err = s.serviceMgr.Stop(r.Context(), req.Service)
-	case "restart":
-		err = s.serviceMgr.Restart(r.Context(), req.Service)
-	case "reload":
-		err = s.serviceMgr.Reload(r.Context(), req.Service)
-	case "enable":
-		err = s.serviceMgr.Enable(r.Context(), req.Service)
-	case "disable":
-		err = s.serviceMgr.Disable(r.Context(), req.Service)
-	default:
-		http.Error(w, "unknown action", http.StatusBadRequest)
+	svc := strings.TrimSpace(req.Service)
+	if svc == "" {
+		http.Error(w, "service required", http.StatusBadRequest)
 		return
+	}
+
+	var err error
+	if svc == "pf" {
+		switch req.Action {
+		case "start":
+			_, err = s.exec.Execute(r.Context(), "/sbin/pfctl", "-e")
+			_ = s.serviceMgr.Enable(r.Context(), "pf")
+		case "stop":
+			_, err = s.exec.Execute(r.Context(), "/sbin/pfctl", "-d")
+			_ = s.serviceMgr.Disable(r.Context(), "pf")
+		case "reload":
+			err = s.firewallMgr.Reload(r.Context())
+		case "restart":
+			_, _ = s.exec.Execute(r.Context(), "/sbin/pfctl", "-d")
+			_, err = s.exec.Execute(r.Context(), "/sbin/pfctl", "-e")
+		}
+	} else {
+		switch svc {
+		case "apache":
+			svc = "apache24"
+		case "mariadb":
+			svc = "mysql-server"
+		}
+
+		switch req.Action {
+		case "start":
+			err = s.serviceMgr.Start(r.Context(), svc)
+		case "stop":
+			err = s.serviceMgr.Stop(r.Context(), svc)
+		case "restart":
+			err = s.serviceMgr.Restart(r.Context(), svc)
+		case "reload":
+			err = s.serviceMgr.Reload(r.Context(), svc)
+		case "enable":
+			err = s.serviceMgr.Enable(r.Context(), svc)
+		case "disable":
+			err = s.serviceMgr.Disable(r.Context(), svc)
+		default:
+			http.Error(w, "unknown action", http.StatusBadRequest)
+			return
+		}
 	}
 
 	if err != nil {
@@ -376,6 +598,7 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 
 	var req struct {
 		Package string `json:"package"`
+		Service string `json:"service"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -383,20 +606,42 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	pkgKey := strings.ToLower(req.Package)
 	var pkgs []string
-	switch strings.ToLower(req.Package) {
-	case "nginx", "apache", "caddy", "litespeed":
-		pkgs = s.pkgMgr.GetWebServerPkgs(req.Package)
-	case "mariadb", "postgresql", "phpmyadmin", "phppgadmin":
-		pkgs = s.pkgMgr.GetDatabasePkgs(req.Package)
+	var rcService string
+
+	switch pkgKey {
+	case "nginx":
+		pkgs = []string{"nginx"}
+		rcService = "nginx"
+	case "apache", "apache24":
+		pkgs = []string{"apache24"}
+		rcService = "apache24"
+	case "caddy":
+		pkgs = []string{"caddy"}
+		rcService = "caddy"
+	case "litespeed", "openlitespeed":
+		pkgs = []string{"openlitespeed"}
+		rcService = "openlitespeed"
+	case "mariadb", "mysql-server":
+		pkgs = []string{"mariadb1011-server", "mariadb1011-client"}
+		rcService = "mysql"
+	case "postgresql":
+		pkgs = []string{"postgresql16-server", "postgresql16-client"}
+		rcService = "postgresql"
+	case "fail2ban":
+		pkgs = []string{"fail2ban"}
+		rcService = "fail2ban"
 	case "php82", "php83", "php84", "php85":
-		version := strings.TrimPrefix(req.Package, "php")
+		version := strings.TrimPrefix(pkgKey, "php")
 		if len(version) == 2 {
 			version = string(version[0]) + "." + string(version[1])
 		}
 		pkgs = s.pkgMgr.GetPHPPkgs(version)
+		rcService = "php-fpm"
 	default:
 		pkgs = []string{req.Package}
+		rcService = req.Service
 	}
 
 	err := s.pkgMgr.Install(r.Context(), pkgs...)
@@ -405,10 +650,76 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if rcService != "" {
+		_ = s.serviceMgr.Enable(r.Context(), rcService)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Successfully installed %s", req.Package),
+	})
+}
+
+// handleAPIServiceUninstall stops, disables, and deletes package via FreeBSD pkg.
+func (s *Server) handleAPIServiceUninstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Service string `json:"service"`
+		Package string `json:"package"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Service != "" {
+		_ = s.serviceMgr.Stop(r.Context(), req.Service)
+		_ = s.serviceMgr.Disable(r.Context(), req.Service)
+	}
+
+	pkgKey := strings.ToLower(req.Package)
+	var pkgs []string
+	switch pkgKey {
+	case "nginx":
+		pkgs = []string{"nginx"}
+	case "apache", "apache24":
+		pkgs = []string{"apache24"}
+	case "caddy":
+		pkgs = []string{"caddy"}
+	case "litespeed", "openlitespeed":
+		pkgs = []string{"openlitespeed"}
+	case "mariadb", "mysql-server":
+		pkgs = []string{"mariadb1011-server", "mariadb1011-client"}
+	case "postgresql":
+		pkgs = []string{"postgresql16-server", "postgresql16-client"}
+	case "fail2ban":
+		pkgs = []string{"fail2ban"}
+	case "php82", "php83", "php84", "php85":
+		version := strings.TrimPrefix(pkgKey, "php")
+		if len(version) == 2 {
+			version = string(version[0]) + "." + string(version[1])
+		}
+		pkgs = s.pkgMgr.GetPHPPkgs(version)
+	default:
+		if req.Package != "" {
+			pkgs = []string{req.Package}
+		}
+	}
+
+	for _, p := range pkgs {
+		_ = s.pkgMgr.Uninstall(r.Context(), p)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Successfully uninstalled %s", req.Package),
 	})
 }
 
