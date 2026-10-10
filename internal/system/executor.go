@@ -65,17 +65,21 @@ func (e *Executor) Execute(ctx context.Context, command string, args ...string) 
 	}
 
 	if err != nil {
-		return res, fmt.Errorf("command '%s' failed (exit %d): %s (stderr: %s)", command, exitCode, err, res.Stderr)
+		errMsg := res.Stderr
+		if errMsg == "" {
+			errMsg = res.Stdout
+		}
+		return res, fmt.Errorf("command '%s' failed (exit %d): %s (details: %s)", command, exitCode, err, errMsg)
 	}
 
 	return res, nil
 }
 
-// ExecuteAsUser executes a command strictly isolated under a specific system username.
-// This prevents tasks (like site scripts, PHP workers, git pulls) from having root or panel daemon privileges.
+// ExecuteAsUser executes a command under a specific user if specified.
+// If targetUser is empty or "root", it executes directly with root administrator privileges.
 func (e *Executor) ExecuteAsUser(ctx context.Context, targetUser string, command string, args ...string) (*ExecutionResult, error) {
 	if targetUser == "" || targetUser == "root" {
-		return nil, fmt.Errorf("isolated execution must target an unprivileged user, got '%s'", targetUser)
+		return e.Execute(ctx, command, args...)
 	}
 
 	if ctx == nil {
@@ -138,7 +142,11 @@ func (e *Executor) ExecuteAsUser(ctx context.Context, targetUser string, command
 	}
 
 	if err != nil {
-		return res, fmt.Errorf("isolated execution as '%s' failed: %s (stderr: %s)", targetUser, err, res.Stderr)
+		errMsg := res.Stderr
+		if errMsg == "" {
+			errMsg = res.Stdout
+		}
+		return res, fmt.Errorf("execution as '%s' failed: %s (details: %s)", targetUser, err, errMsg)
 	}
 
 	return res, nil

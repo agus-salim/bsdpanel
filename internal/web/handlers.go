@@ -388,8 +388,8 @@ func (s *Server) handleAPITerminalExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetUser := req.User
-	if targetUser == "" || targetUser == "root" {
-		targetUser = "bsdpanel"
+	if targetUser == "" {
+		targetUser = "root"
 	}
 
 	cmd := parts[0]
@@ -398,8 +398,15 @@ func (s *Server) handleAPITerminalExec(w http.ResponseWriter, r *http.Request) {
 	res, err := s.exec.ExecuteAsUser(r.Context(), targetUser, cmd, args...)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
+		out := res.Stderr
+		if out == "" {
+			out = res.Stdout
+		}
+		if out == "" {
+			out = err.Error()
+		}
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"output":    res.Stderr + " " + err.Error(),
+			"output":    out,
 			"exit_code": res.ExitCode,
 		})
 		return

@@ -28,11 +28,11 @@ func NewServiceManager(exec *Executor) *ServiceManager {
 // Status checks whether a FreeBSD service is running.
 func (s *ServiceManager) Status(ctx context.Context, serviceName string) (*ServiceStatus, error) {
 	cmd := "/usr/sbin/service"
-	args := []string{serviceName, "status"}
+	args := []string{serviceName, "onestatus"}
 
 	res, err := s.exec.Execute(ctx, cmd, args...)
 	isRunning := false
-	if err == nil && strings.Contains(res.Stdout, "is running as pid") {
+	if err == nil && (strings.Contains(res.Stdout, "is running as pid") || strings.Contains(res.Stdout, "is running")) {
 		isRunning = true
 	}
 
@@ -107,6 +107,32 @@ func (s *ServiceManager) action(ctx context.Context, serviceName, action string)
 		args = append([]string{cmd}, args...)
 		cmd = "/usr/local/bin/doas"
 	}
-	_, err := s.exec.Execute(ctx, cmd, args...)
-	return err
+	res, err := s.exec.Execute(ctx, cmd, args...)
+	if err != nil {
+		// On FreeBSD, if a service is not yet enabled in /etc/rc.conf,
+		// standard actions (start/restart/reload/stop) fail with exit 1.
+		// Retrying with the 'one' prefix (e.g., onerestart, onestart) bypasses rc.conf checks.
+		oneAction := "one" + action
+		argsOne := []string{serviceName, oneAction}
+		if s.exec.UseDoas {
+			argsOne = append([]string{cmd}, argsOne...)
+		}
+		resOne, errOne := s.exec.Execute(ctx, cmd, argsOne...)
+		if errOne == nil {
+			return nil
+		}
+
+		errMsg := res.Stderr
+		if errMsg == "" {
+			errMsg = res.Stdout
+		}
+		if errMsg == "" {
+			errMsg = resOne.Stderr
+		}
+		if errMsg == "" {
+			errMsg = resOne.Stdout
+		}
+		return fmt.Errorf("service %s %s failed: %s", serviceName, action, errMsg)
+	}
+	return nil
 }

@@ -15,8 +15,8 @@ rcvar="bsdpanel_enable"
 load_rc_config $name
 
 : ${bsdpanel_enable:="NO"}
-: ${bsdpanel_user:="bsdpanel"}
-: ${bsdpanel_group:="bsdpanel"}
+: ${bsdpanel_user:="root"}
+: ${bsdpanel_group:="wheel"}
 : ${bsdpanel_config:="/usr/local/etc/bsdpanel.json"}
 
 rundir="/var/run/${name}"
