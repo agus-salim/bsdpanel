@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -477,7 +478,7 @@ func (s *Server) getFreeBSDStats(ctx context.Context) SystemStats {
 			freeMB := (freePages * 4096) / 1024 / 1024
 			if stats.MemoryTotal > freeMB {
 				stats.MemoryUsed = stats.MemoryTotal - freeMB
-				stats.MemoryPct = float64(stats.MemoryUsed) / float64(stats.MemoryTotal) * 100
+				stats.MemoryPct = math.Round((float64(stats.MemoryUsed)/float64(stats.MemoryTotal)*100)*10) / 10
 			}
 		}
 	}
@@ -500,7 +501,7 @@ func (s *Server) getFreeBSDStats(ctx context.Context) SystemStats {
 		fields := strings.Fields(strings.Trim(res.Stdout, "{} \n"))
 		if len(fields) > 0 {
 			if load1, err := strconv.ParseFloat(fields[0], 64); err == nil {
-				stats.CPUUsage = load1 * 10.0 // representation scale
+				stats.CPUUsage = math.Round(load1*100) / 10 // e.g. 1.6%
 				if stats.CPUUsage > 100 {
 					stats.CPUUsage = 100
 				}
