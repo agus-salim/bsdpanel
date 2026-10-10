@@ -18,12 +18,38 @@ Panel kontrol VPS berkinerja tinggi, hemat sumber daya (lightweight), dan aman y
 
 ## 🚀 Panduan Ringkas Menjalankan di FreeBSD
 
-### 1. Build Binary
+### 1. Unduh Source Code
+
+**Opsi A — Menggunakan Git:**
+```sh
+pkg install -y git go
+git clone https://github.com/agus-salim/bsdpanel.git
+cd bsdpanel
+```
+
+> **Catatan Troubleshooting `libpcre2`:**
+> Jika saat menjalankan `git` muncul error:
+> `ld-elf.so.1: /usr/local/lib/libpcre2-8.so.0: version PCRE2_10.47 required by /usr/local/bin/git not defined`
+> Perbaiki library FreeBSD Anda dengan perintah:
+> ```sh
+> pkg install -fy pcre2 git
+> # atau update seluruh paket sistem:
+> pkg upgrade -y
+> ```
+
+**Opsi B — Menggunakan `fetch` bawaan FreeBSD (Tanpa Git):**
+```sh
+fetch https://github.com/agus-salim/bsdpanel/archive/refs/heads/main.tar.gz
+tar -zxvf main.tar.gz
+cd bsdpanel-main
+```
+
+### 2. Build Binary
 ```sh
 go build -o /usr/local/bin/bsdpanel ./cmd/bsdpanel
 ```
 
-### 2. Konfigurasi Service FreeBSD
+### 3. Konfigurasi Service FreeBSD
 ```sh
 # Salin service rc.d
 cp deploy/rc.d/bsdpanel /usr/local/etc/rc.d/bsdpanel
@@ -41,7 +67,7 @@ sysrc bsdpanel_enable="YES"
 service bsdpanel start
 ```
 
-### 3. Nginx Reverse Proxy
+### 4. Nginx Reverse Proxy
 ```sh
 cp deploy/nginx/bsdpanel.conf /usr/local/etc/nginx/conf.d/bsdpanel.conf
 nginx -t && service nginx reload
