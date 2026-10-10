@@ -260,6 +260,81 @@ func (m *SiteManager) ListSites() ([]Site, error) {
 	return result, nil
 }
 
+// GetSite retrieves a specific site by domain.
+func (m *SiteManager) GetSite(domain string) (*Site, error) {
+	filePath := filepath.Join(m.dataDir, "sites", fmt.Sprintf("%s.json", domain))
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("site %s not found: %w", domain, err)
+	}
+	var s Site
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// UpdateSite modifies web server, php version, proxy, and SSL settings of an existing site.
+func (m *SiteManager) UpdateSite(ctx context.Context, updated *Site) error {
+	existing, err := m.GetSite(updated.Domain)
+	if err != nil {
+		return err
+	}
+
+	// Update configurable settings
+	if updated.WebServer != "" {
+		existing.WebServer = updated.WebServer
+	}
+	if updated.PHPVersion != "" {
+		existing.PHPVersion = updated.PHPVersion
+	}
+	existing.IsReverseProxy = updated.IsReverseProxy
+	existing.ProxyUpstream = updated.ProxyUpstream
+	existing.SSLEnabled = updated.SSLEnabled
+
+	// Regenerate configs
+	if err := m.generatePHPFPMPool(existing); err != nil {
+		return fmt.Errorf("php pool error: %w", err)
+	}
+	if err := m.generateVHostConfig(existing); err != nil {
+		return fmt.Errorf("vhost config error: %w", err)
+	}
+
+	// Restart PHP & reload Nginx
+	_ = m.restartPHP(ctx, existing.PHPVersion)
+	_ = m.serviceMgr.Reload(ctx, existing.WebServer)
+
+	return m.saveSiteRecord(existing)
+}
+
+// DeleteSite removes virtual host, php pool, site record, and optionally cleans user home.
+func (m *SiteManager) DeleteSite(ctx context.Context, domain string, removeFiles bool) error {
+	site, err := m.GetSite(domain)
+	if err != nil {
+		return err
+	}
+
+	// Remove vhost from conf.d and sites-available
+	_ = os.Remove(filepath.Join(m.vhostDir, fmt.Sprintf("%s.conf", domain)))
+	_ = os.Remove(filepath.Join("/usr/local/etc/nginx/sites-available", fmt.Sprintf("%s.conf", domain)))
+
+	// Remove php-fpm pool
+	_ = os.Remove(filepath.Join(m.phpPoolDir, fmt.Sprintf("%s.conf", site.SystemUser)))
+
+	// Remove site metadata
+	_ = os.Remove(filepath.Join(m.dataDir, "sites", fmt.Sprintf("%s.json", domain)))
+
+	// Reload services
+	_ = m.serviceMgr.Reload(ctx, site.WebServer)
+	_ = m.restartPHP(ctx, site.PHPVersion)
+
+	if removeFiles && site.SystemUser != "" && site.SystemUser != "root" {
+		_ = m.userMgr.DeleteSiteUser(ctx, site.SystemUser, true)
+	}
+
+	return nil
+}
+
 // EnsureNginxConfigured verifies that /usr/local/etc/nginx/nginx.conf includes conf.d/*.conf.
 func (m *SiteManager) EnsureNginxConfigured(ctx context.Context) error {
 	_ = os.MkdirAll("/usr/local/etc/nginx/conf.d", 0755)

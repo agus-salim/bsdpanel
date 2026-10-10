@@ -217,6 +217,69 @@ func (s *Server) handleAPISites(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
+// handleAPISiteUpdate handles modifications to an existing site (web server, PHP version, proxy, SSL).
+func (s *Server) handleAPISiteUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var updated sites.Site
+	if err := json.NewDecoder(r.Body).Decode(&updated); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if updated.Domain == "" {
+		http.Error(w, "domain is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.siteMgr.UpdateSite(r.Context(), &updated); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Site %s updated successfully", updated.Domain),
+	})
+}
+
+// handleAPISiteDelete removes a site and its configurations.
+func (s *Server) handleAPISiteDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Domain      string `json:"domain"`
+		RemoveFiles bool   `json:"remove_files"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Domain == "" {
+		http.Error(w, "domain is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.siteMgr.DeleteSite(r.Context(), req.Domain, req.RemoveFiles); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Site %s deleted successfully", req.Domain),
+	})
+}
+
 // handleAPIServices returns status or triggers service actions.
 func (s *Server) handleAPIServices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -482,14 +545,27 @@ func (s *Server) getFreeBSDStats(ctx context.Context) SystemStats {
 		}
 	}
 
-	// Read free pages via sysctl vm.stats.vm.v_free_count
-	if res, err := s.exec.Execute(ctx, "/sbin/sysctl", "-n", "vm.stats.vm.v_free_count"); err == nil {
-		if freePages, err := strconv.ParseUint(strings.TrimSpace(res.Stdout), 10, 64); err == nil {
-			freeMB := (freePages * 4096) / 1024 / 1024
-			if stats.MemoryTotal > freeMB {
-				stats.MemoryUsed = stats.MemoryTotal - freeMB
-				stats.MemoryPct = math.Round((float64(stats.MemoryUsed)/float64(stats.MemoryTotal)*100)*10) / 10
-			}
+	// Read real Used RAM on FreeBSD matching htop (Active + Wire pages)
+	pageSize := uint64(4096)
+	if res, err := s.exec.Execute(ctx, "/sbin/sysctl", "-n", "hw.pagesize"); err == nil {
+		if ps, err := strconv.ParseUint(strings.TrimSpace(res.Stdout), 10, 64); err == nil && ps > 0 {
+			pageSize = ps
+		}
+	}
+
+	var activePages, wirePages uint64
+	if res, err := s.exec.Execute(ctx, "/sbin/sysctl", "-n", "vm.stats.vm.v_active_count"); err == nil {
+		activePages, _ = strconv.ParseUint(strings.TrimSpace(res.Stdout), 10, 64)
+	}
+	if res, err := s.exec.Execute(ctx, "/sbin/sysctl", "-n", "vm.stats.vm.v_wire_count"); err == nil {
+		wirePages, _ = strconv.ParseUint(strings.TrimSpace(res.Stdout), 10, 64)
+	}
+
+	if activePages > 0 || wirePages > 0 {
+		usedBytes := (activePages + wirePages) * pageSize
+		stats.MemoryUsed = usedBytes / 1024 / 1024
+		if stats.MemoryTotal > 0 {
+			stats.MemoryPct = math.Round((float64(stats.MemoryUsed)/float64(stats.MemoryTotal)*100)*10) / 10
 		}
 	}
 
