@@ -1,11 +1,10 @@
-/* Fira Sans Local Font Specification with fallbacks */
+/* Fira Sans Local Font Specification (Offline Embedded) */
 @font-face {
   font-family: 'Fira Sans';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local('Fira Sans Regular'), local('FiraSans-Regular'),
-       url('../fonts/fira-sans-v17-latin-regular.woff2') format('woff2');
+  src: url('/static/fonts/fira-sans-regular.woff2') format('woff2');
 }
 
 @font-face {
@@ -13,8 +12,7 @@
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: local('Fira Sans Medium'), local('FiraSans-Medium'),
-       url('../fonts/fira-sans-v17-latin-500.woff2') format('woff2');
+  src: url('/static/fonts/fira-sans-500.woff2') format('woff2');
 }
 
 @font-face {
@@ -22,8 +20,7 @@
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: local('Fira Sans SemiBold'), local('FiraSans-SemiBold'),
-       url('../fonts/fira-sans-v17-latin-600.woff2') format('woff2');
+  src: url('/static/fonts/fira-sans-600.woff2') format('woff2');
 }
 
 @font-face {
@@ -31,11 +28,10 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: local('Fira Sans Bold'), local('FiraSans-Bold'),
-       url('../fonts/fira-sans-v17-latin-700.woff2') format('woff2');
+  src: url('/static/fonts/fira-sans-700.woff2') format('woff2');
 }
 
-body, html {
+html, body {
   font-family: 'Fira Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

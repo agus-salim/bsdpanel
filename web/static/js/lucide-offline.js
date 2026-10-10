@@ -1,6 +1,6 @@
 /**
  * Lucide Icons Offline SVG Helper for BSD Panel
- * Renders icons offline from embedded SVG definitions.
+ * Renders icons offline from embedded SVG definitions with strict size enforcement.
  */
 (function() {
   const icons = {
@@ -35,7 +35,7 @@
       const iconName = el.getAttribute('data-lucide');
       const iconBody = icons[iconName];
       if (iconBody) {
-        const classes = el.getAttribute('class') || 'w-5 h-5';
+        const classes = el.getAttribute('class') || 'w-4 h-4';
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         svg.setAttribute('fill', 'none');
@@ -44,6 +44,28 @@
         svg.setAttribute('stroke-linecap', 'round');
         svg.setAttribute('stroke-linejoin', 'round');
         svg.setAttribute('class', classes);
+
+        // Strict dimension calculation to prevent any oversized stretching
+        let px = 16;
+        if (classes.includes('w-3.5') || classes.includes('w-3') || classes.includes('h-3.5')) {
+          px = 14;
+        } else if (classes.includes('w-5') || classes.includes('h-5')) {
+          px = 20;
+        } else if (classes.includes('w-6') || classes.includes('h-6')) {
+          px = 24;
+        }
+
+        svg.setAttribute('width', px);
+        svg.setAttribute('height', px);
+        svg.style.width = px + 'px';
+        svg.style.height = px + 'px';
+        svg.style.maxWidth = px + 'px';
+        svg.style.maxHeight = px + 'px';
+        svg.style.minWidth = px + 'px';
+        svg.style.minHeight = px + 'px';
+        svg.style.display = 'inline-block';
+        svg.style.verticalAlign = 'middle';
+        svg.style.flexShrink = '0';
         svg.innerHTML = iconBody;
         el.replaceWith(svg);
       }

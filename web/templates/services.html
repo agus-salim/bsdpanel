@@ -127,6 +127,56 @@
       </div>
     </div>
   </div>
+
+  <!-- One-Click Software Stack Installer -->
+  <div class="bg-dark-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800">
+      <h3 class="text-sm font-bold text-slate-200">One-Click FreeBSD Package Installer</h3>
+      <p class="text-xs text-slate-500">Easily install hosting components with complete dependencies via FreeBSD pkg</p>
+    </div>
+
+    <div class="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+      <button onclick="installPackage('nginx')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">Nginx Web Server</div>
+        <div class="text-[11px] text-slate-400 mt-1">High-perf reverse proxy</div>
+      </button>
+
+      <button onclick="installPackage('apache')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">Apache 2.4</div>
+        <div class="text-[11px] text-slate-400 mt-1">Full .htaccess support</div>
+      </button>
+
+      <button onclick="installPackage('mariadb')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">MariaDB Server</div>
+        <div class="text-[11px] text-slate-400 mt-1">MySQL-compatible SQL engine</div>
+      </button>
+
+      <button onclick="installPackage('postgresql')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">PostgreSQL Server</div>
+        <div class="text-[11px] text-slate-400 mt-1">Enterprise SQL database</div>
+      </button>
+
+      <button onclick="installPackage('php83')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">PHP 8.3 + Exts</div>
+        <div class="text-[11px] text-slate-400 mt-1">Standard PHP engine</div>
+      </button>
+
+      <button onclick="installPackage('php84')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">PHP 8.4 + Exts</div>
+        <div class="text-[11px] text-slate-400 mt-1">Latest PHP release</div>
+      </button>
+
+      <button onclick="installPackage('phpmyadmin')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">phpMyAdmin</div>
+        <div class="text-[11px] text-slate-400 mt-1">Web MySQL manager</div>
+      </button>
+
+      <button onclick="installPackage('caddy')" class="p-3 bg-dark-900 border border-slate-800 rounded-lg hover:border-sky-500/50 hover:bg-slate-900 text-left transition-all">
+        <div class="font-bold text-slate-200">Caddy Server</div>
+        <div class="text-[11px] text-slate-400 mt-1">Automatic TLS server</div>
+      </button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -143,6 +193,27 @@ async function controlService(service, action) {
     } else {
       const err = await res.text();
       alert(`Action failed: ${err}`);
+    }
+  } catch (e) {
+    alert('Network error: ' + e);
+  }
+}
+
+async function installPackage(pkgName) {
+  if (!confirm(`Are you sure you want to install ${pkgName} on FreeBSD?`)) return;
+  alert(`Starting FreeBSD pkg installation for ${pkgName}. This may take a minute...`);
+  try {
+    const res = await fetch('/api/services/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package: pkgName })
+    });
+    if (res.ok) {
+      alert(`Package ${pkgName} installed successfully!`);
+      window.location.reload();
+    } else {
+      const err = await res.text();
+      alert(`Installation failed: ${err}`);
     }
   } catch (e) {
     alert('Network error: ' + e);

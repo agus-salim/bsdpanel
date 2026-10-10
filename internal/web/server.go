@@ -28,7 +28,7 @@ type Server struct {
 	firewallMgr *system.FirewallManager
 	siteMgr     *sites.SiteManager
 	dbMgr       *database.DatabaseManager
-	tmpl        *template.Template
+	pages       map[string]*template.Template
 	staticFS    http.FileSystem
 	sessions    map[string]time.Time
 	sessMu      sync.RWMutex
@@ -46,11 +46,31 @@ func NewServer(
 	dbMgr *database.DatabaseManager,
 	embeddedAssets embed.FS,
 ) (*Server, error) {
-	// Parse templates from embedded assets or local disk
-	tmpl, err := template.ParseFS(embeddedAssets, "templates/*.html")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse templates: %w", err)
+	// Build isolated template sets per page to avoid Go template namespace collisions
+	pages := make(map[string]*template.Template)
+	pageFiles := []string{
+		"dashboard.html",
+		"sites.html",
+		"services.html",
+		"databases.html",
+		"firewall.html",
+		"terminal.html",
 	}
+
+	for _, p := range pageFiles {
+		t, err := template.ParseFS(embeddedAssets, "templates/layout.html", "templates/"+p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse template %s: %w", p, err)
+		}
+		pages[p] = t
+	}
+
+	// Standalone login page without master layout
+	tLogin, err := template.ParseFS(embeddedAssets, "templates/login.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse login template: %w", err)
+	}
+	pages["login.html"] = tLogin
 
 	staticSub, err := fs.Sub(embeddedAssets, "static")
 	if err != nil {
@@ -66,12 +86,33 @@ func NewServer(
 		firewallMgr: firewallMgr,
 		siteMgr:     siteMgr,
 		dbMgr:       dbMgr,
-		tmpl:        tmpl,
+		pages:       pages,
 		staticFS:    http.FS(staticSub),
 		sessions:    make(map[string]time.Time),
 	}
 
 	return s, nil
+}
+
+// render executes the appropriate template tree for a given page.
+func (s *Server) render(w http.ResponseWriter, page string, data interface{}) {
+	tmpl, ok := s.pages[page]
+	if !ok {
+		http.Error(w, "template not found: "+page, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	var err error
+	if page == "login.html" {
+		err = tmpl.Execute(w, data)
+	} else {
+		err = tmpl.ExecuteTemplate(w, "layout", data)
+	}
+
+	if err != nil {
+		http.Error(w, "Render error: "+err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // Router configures all HTTP routes.
@@ -98,8 +139,10 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/sites", s.handleAPISites)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/api/services/action", s.handleAPIServiceAction)
+	mux.HandleFunc("/api/services/install", s.handleAPIServiceInstall)
 	mux.HandleFunc("/api/databases", s.handleAPIDatabases)
 	mux.HandleFunc("/api/firewall", s.handleAPIFirewall)
+	mux.HandleFunc("/api/terminal/exec", s.handleAPITerminalExec)
 	mux.HandleFunc("/api/logs", s.handleAPILogs)
 
 	// Wrap with security & authentication middleware

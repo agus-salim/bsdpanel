@@ -5,7 +5,7 @@
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-base font-bold text-slate-100">Web Terminal & System Log Viewer</h2>
-      <p class="text-xs text-slate-400 mt-0.5">Safely inspect FreeBSD service logs and tenant directories</p>
+      <p class="text-xs text-slate-400 mt-0.5">Safely execute FreeBSD commands and inspect isolated tenant environments</p>
     </div>
   </div>
 
@@ -18,18 +18,66 @@
         <span class="text-xs font-mono text-slate-400 ml-2">freebsd-console [isolated unprivileged execution]</span>
       </div>
       <div class="text-xs text-slate-500 font-mono">
-        Host: freebsd.local
+        User: bsdpanel
       </div>
     </div>
 
-    <div class="p-4 bg-dark-950 min-h-[400px] font-mono text-xs text-slate-200 space-y-2 leading-relaxed">
-      <div class="text-slate-500">FreeBSD 14.1-RELEASE-p3 (GENERIC)</div>
-      <div class="text-sky-400">BSD Panel non-root console ready. Type commands or choose a log stream.</div>
-      <div class="mt-4 p-3 rounded bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400">
-        <p class="font-semibold text-slate-300 mb-1">Architecture Note:</p>
-        <p>Terminal commands are dispatched via <code>system.Executor.ExecuteAsUser()</code>, guaranteeing that site processes remain constrained within their assigned FreeBSD jail/UID environment.</p>
+    <!-- Output window -->
+    <div id="termOutput" class="p-4 bg-dark-950 min-h-[350px] max-h-[500px] overflow-y-auto font-mono text-xs text-slate-200 space-y-2 leading-relaxed">
+      <div class="text-slate-500">FreeBSD 14.1-RELEASE (GENERIC)</div>
+      <div class="text-sky-400">BSD Panel interactive console active. Enter commands below:</div>
+      <div class="p-2.5 rounded bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400">
+        💡 Example commands: <code>uptime</code>, <code>uname -a</code>, <code>df -h</code>, <code>sockstat -4 -l</code>, <code>service -e</code>
       </div>
     </div>
+
+    <!-- Input bar -->
+    <form onsubmit="handleTermSubmit(event)" class="p-3 bg-dark-900 border-t border-slate-800 flex items-center gap-2">
+      <span class="text-sky-400 font-mono text-xs pl-2 font-bold">$</span>
+      <input type="text" id="termCmd" placeholder="Type a command and press Enter..." required autofocus
+        class="flex-1 bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500">
+      <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer">
+        Execute
+      </button>
+    </form>
   </div>
 </div>
+
+<script>
+async function handleTermSubmit(e) {
+  e.preventDefault();
+  const input = document.getElementById('termCmd');
+  const output = document.getElementById('termOutput');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+
+  // Append command to output
+  const cmdLine = document.createElement('div');
+  cmdLine.className = 'text-sky-400 font-bold mt-2';
+  cmdLine.textContent = '$ ' + cmd;
+  output.appendChild(cmdLine);
+
+  input.value = '';
+
+  try {
+    const res = await fetch('/api/terminal/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd, user: 'bsdpanel' })
+    });
+    const data = await res.json();
+    const resultLine = document.createElement('pre');
+    resultLine.className = 'text-slate-300 whitespace-pre-wrap font-mono text-[11px] mt-1';
+    resultLine.textContent = data.output || '(No output returned)';
+    output.appendChild(resultLine);
+  } catch (err) {
+    const errLine = document.createElement('div');
+    errLine.className = 'text-rose-400 font-mono text-[11px]';
+    errLine.textContent = 'Error executing command: ' + err;
+    output.appendChild(errLine);
+  }
+
+  output.scrollTop = output.scrollHeight;
+}
+</script>
 {{end}}
