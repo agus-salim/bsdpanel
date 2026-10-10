@@ -39,7 +39,7 @@ func (e *Executor) Execute(ctx context.Context, command string, args ...string) 
 	if ctx == nil {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(context.Background(), e.DefaultWait)
-		defer cancel
+		defer cancel()
 	}
 
 	start := time.Now()
@@ -81,7 +81,7 @@ func (e *Executor) ExecuteAsUser(ctx context.Context, targetUser string, command
 	if ctx == nil {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(context.Background(), e.DefaultWait)
-		defer cancel
+		defer cancel()
 	}
 
 	// Lookup system user on FreeBSD (maps to /etc/passwd or master.passwd)
