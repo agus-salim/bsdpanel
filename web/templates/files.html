@@ -31,15 +31,15 @@
     <!-- Path Bar & Action Buttons -->
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
       <!-- Breadcrumb Bar -->
-      <div class="flex-1 flex items-center gap-2 bg-dark-950 border border-slate-700/80 rounded-lg px-3 py-1.5 overflow-x-auto text-xs font-mono shadow-inner">
-        <button onclick="goToParent()" title="Go up to parent directory" class="text-slate-400 hover:text-slate-100 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer flex-shrink-0">
+      <div class="flex-1 flex items-center gap-2 bg-dark-950 border border-slate-700/80 rounded-lg px-3 py-1.5 overflow-x-auto text-xs font-mono shadow-inner" style="min-height: 38px;">
+        <button onclick="goToParent()" title="Go up to parent directory" class="text-slate-300 hover:text-white p-1 rounded hover:bg-slate-800 transition-all cursor-pointer flex-shrink-0" style="background: transparent;">
           <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
         </button>
         <span class="text-slate-500 font-medium select-none flex-shrink-0">Path:</span>
         <div id="breadcrumbTrail" class="flex items-center gap-1.5 text-slate-300 flex-1 overflow-x-auto py-0.5">
           <!-- Populated by JS -->
         </div>
-        <button onclick="copyCurrentPath()" title="Copy current path" class="text-slate-400 hover:text-sky-400 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer flex-shrink-0" id="copyPathBtn">
+        <button onclick="copyCurrentPath()" title="Copy current path" class="text-slate-400 hover:text-sky-400 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer flex-shrink-0" id="copyPathBtn" style="background: transparent;">
           <i data-lucide="copy" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -60,34 +60,35 @@
           <i data-lucide="upload" class="w-3.5 h-3.5"></i>
           <span>Upload</span>
         </button>
-        <input type="file" id="fileUploadInput" onchange="handleFileUpload(this)" class="hidden" multiple>
+        <input type="file" id="fileUploadInput" onchange="handleFileInputChange(this)" class="hidden" multiple>
 
         <button onclick="openArchiveModalForSelection()" id="archiveSelectedBtn" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 transition-all cursor-pointer shadow-sm">
           <i data-lucide="archive" class="w-3.5 h-3.5"></i>
           <span>Archive</span>
         </button>
 
-        <button onclick="loadDirectory(currentPath)" title="Refresh" class="p-2 rounded-lg bg-dark-900 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm">
+        <button onclick="loadDirectory(currentPath)" title="Refresh" class="p-2 rounded-lg bg-dark-900 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer shadow-sm">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
         </button>
       </div>
     </div>
 
     <!-- Filter & Live Search Toolbar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-slate-700/40">
-      <div class="relative flex-1 max-w-sm">
-        <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-500">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-700/40">
+      <!-- Search Box with embedded search icon -->
+      <div class="relative flex items-center" style="max-width: 320px; width: 100%;">
+        <span class="text-slate-400" style="position: absolute; left: 10px; pointer-events: none; display: flex; align-items: center;">
           <i data-lucide="search" class="w-3.5 h-3.5"></i>
-        </div>
-        <input type="text" id="fileSearchInput" oninput="filterFiles(this.value)" placeholder="Filter items in current folder..." class="w-full pl-8 pr-7 py-1.5 bg-dark-950 border border-slate-700/80 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500">
-        <button id="clearSearchBtn" onclick="clearFileFilter()" class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-500 hover:text-slate-300 cursor-pointer">
+        </span>
+        <input type="text" id="fileSearchInput" oninput="filterFiles(this.value)" placeholder="Filter items in current folder..." style="padding-left: 32px; padding-right: 28px;" class="w-full py-1.5 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono">
+        <button id="clearSearchBtn" onclick="clearFileFilter()" class="hidden text-slate-400 hover:text-slate-200" style="position: absolute; right: 10px; cursor: pointer; background: transparent;">
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
       </div>
 
-      <!-- Quick summary badge -->
-      <div id="dirStatsText" class="text-[11px] font-mono text-slate-400 self-center">
-        Loading items...
+      <!-- Directory summary text -->
+      <div id="dirStatsText" class="text-xs font-mono text-slate-300 flex items-center gap-1.5">
+        <span>Loading items...</span>
       </div>
     </div>
   </div>
@@ -96,7 +97,7 @@
   <div id="selectionBanner" class="hidden bg-sky-950/40 border border-sky-600/40 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-sky-200 animate-fadeIn">
     <div class="flex items-center gap-2">
       <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
-      <span id="selectionCountText" class="font-medium font-mono">0 items selected</span>
+      <span id="selectionCountText" class="font-medium font-mono text-slate-100">0 items selected</span>
     </div>
     <div class="flex items-center gap-2">
       <button onclick="openArchiveModalForSelection()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium transition-all cursor-pointer shadow-sm">
@@ -107,7 +108,7 @@
         <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
         <span>Delete Selected</span>
       </button>
-      <button onclick="clearSelection()" class="px-2.5 py-1 rounded-lg bg-dark-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-all cursor-pointer">
+      <button onclick="clearSelection()" class="px-2.5 py-1 rounded-lg bg-dark-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
         Deselect
       </button>
     </div>
@@ -117,28 +118,28 @@
   <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs">
-        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-300 font-semibold uppercase tracking-wider text-[11px]">
           <tr>
             <th class="w-10 px-4 py-3 text-center">
               <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" class="w-3.5 h-3.5 rounded border-slate-700 bg-dark-950 text-sky-500 focus:ring-0 cursor-pointer">
             </th>
-            <th class="px-4 py-3 cursor-pointer select-none hover:text-slate-200" onclick="sortFiles('name')">
+            <th class="px-4 py-3 cursor-pointer select-none hover:text-white" onclick="sortFiles('name')">
               <div class="flex items-center gap-1">
                 <span>Name</span>
-                <span id="sortNameIndicator" class="text-[10px] text-slate-500"></span>
+                <span id="sortNameIndicator" class="text-[10px] text-sky-400"></span>
               </div>
             </th>
-            <th class="px-4 py-3 cursor-pointer select-none hover:text-slate-200" onclick="sortFiles('size')">
+            <th class="px-4 py-3 cursor-pointer select-none hover:text-white" onclick="sortFiles('size')">
               <div class="flex items-center gap-1">
                 <span>Size</span>
-                <span id="sortSizeIndicator" class="text-[10px] text-slate-500"></span>
+                <span id="sortSizeIndicator" class="text-[10px] text-sky-400"></span>
               </div>
             </th>
             <th class="px-4 py-3">Permissions</th>
-            <th class="px-4 py-3 cursor-pointer select-none hover:text-slate-200" onclick="sortFiles('modified')">
+            <th class="px-4 py-3 cursor-pointer select-none hover:text-white" onclick="sortFiles('modified')">
               <div class="flex items-center gap-1">
                 <span>Modified</span>
-                <span id="sortModifiedIndicator" class="text-[10px] text-slate-500"></span>
+                <span id="sortModifiedIndicator" class="text-[10px] text-sky-400"></span>
               </div>
             </th>
             <th class="px-4 py-3 text-right">Actions</th>
@@ -160,18 +161,34 @@
 </div>
 
 <!-- ========================================== -->
+<!-- DRAG & DROP OVERLAY (ACTIVATES ON DRAG-OVER) -->
+<!-- ========================================== -->
+<div id="dragDropOverlay" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center pointer-events-none" style="background-color: rgba(9, 13, 22, 0.85); backdrop-filter: blur(4px);">
+  <div class="border-2 border-dashed border-sky-400 rounded-2xl p-8 flex flex-col items-center gap-3 text-center shadow-2xl animate-pulse pointer-events-auto" style="background-color: #0d1117; max-width: 440px; width: 90%;">
+    <div class="w-16 h-16 rounded-full flex items-center justify-center text-sky-400" style="background-color: rgba(14, 165, 233, 0.15);">
+      <i data-lucide="upload" class="w-8 h-8"></i>
+    </div>
+    <h3 class="text-base font-bold text-slate-100">Drop files here to upload</h3>
+    <p class="text-xs text-slate-400">Files will be uploaded directly to:</p>
+    <div id="dropTargetDisplay" class="px-3 py-1.5 rounded-lg text-xs font-mono text-sky-300 border border-slate-700 max-w-full truncate" style="background-color: #090d16;">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ========================================== -->
 <!-- MODALS -->
 <!-- ========================================== -->
 
 <!-- New File Modal -->
-<div id="newFileModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+<div id="newFileModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
   <div class="w-full max-w-md bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
     <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
         <i data-lucide="file-plus" class="w-4 h-4 text-sky-400"></i>
         <span>Create New File</span>
       </div>
-      <button onclick="closeModal('newFileModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+      <button onclick="closeModal('newFileModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer" style="background: transparent;">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -190,14 +207,14 @@
 </div>
 
 <!-- New Folder Modal -->
-<div id="newFolderModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+<div id="newFolderModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
   <div class="w-full max-w-md bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
     <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
         <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i>
         <span>Create New Folder</span>
       </div>
-      <button onclick="closeModal('newFolderModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+      <button onclick="closeModal('newFolderModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer" style="background: transparent;">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -215,14 +232,14 @@
 </div>
 
 <!-- Rename Modal -->
-<div id="renameModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+<div id="renameModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
   <div class="w-full max-w-md bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
     <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
         <i data-lucide="edit" class="w-4 h-4 text-sky-400"></i>
         <span>Rename Item</span>
       </div>
-      <button onclick="closeModal('renameModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+      <button onclick="closeModal('renameModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer" style="background: transparent;">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -241,14 +258,14 @@
 </div>
 
 <!-- Archive / Compress Modal -->
-<div id="archiveModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+<div id="archiveModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
   <div class="w-full max-w-lg bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
     <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
         <i data-lucide="archive" class="w-4 h-4 text-purple-400"></i>
         <span>Create Archive (Compress)</span>
       </div>
-      <button onclick="closeModal('archiveModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+      <button onclick="closeModal('archiveModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer" style="background: transparent;">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -298,14 +315,14 @@
 </div>
 
 <!-- Extract Archive Modal -->
-<div id="extractModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+<div id="extractModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
   <div class="w-full max-w-lg bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
     <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
         <i data-lucide="package" class="w-4 h-4 text-purple-400"></i>
         <span>Extract Archive</span>
       </div>
-      <button onclick="closeModal('extractModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+      <button onclick="closeModal('extractModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer" style="background: transparent;">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -336,7 +353,7 @@
 </div>
 
 <!-- Built-in Code Editor Modal -->
-<div id="editorModal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+<div id="editorModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
   <div class="w-full max-w-5xl bg-dark-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden animate-fadeIn">
     <!-- Editor Header -->
     <div class="p-3.5 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
@@ -375,6 +392,7 @@ let currentSort = { field: 'name', asc: true };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadDirectory(currentPath);
+  setupDragAndDrop();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -390,6 +408,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ==========================================
+// DRAG & DROP UPLOAD
+// ==========================================
+function setupDragAndDrop() {
+  let dragCounter = 0;
+  const overlay = document.getElementById('dragDropOverlay');
+
+  window.addEventListener('dragenter', (e) => {
+    if (isDragEventWithFiles(e)) {
+      dragCounter++;
+      document.getElementById('dropTargetDisplay').textContent = currentPath;
+      overlay.classList.remove('hidden');
+      if (window.renderLucideIcons) window.renderLucideIcons();
+    }
+  });
+
+  window.addEventListener('dragleave', (e) => {
+    if (isDragEventWithFiles(e)) {
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        overlay.classList.add('hidden');
+      }
+    }
+  });
+
+  window.addEventListener('dragover', (e) => {
+    if (isDragEventWithFiles(e)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+
+  window.addEventListener('drop', (e) => {
+    if (isDragEventWithFiles(e)) {
+      e.preventDefault();
+      dragCounter = 0;
+      overlay.classList.add('hidden');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        uploadFilesList(Array.from(e.dataTransfer.files));
+      }
+    }
+  });
+}
+
+function isDragEventWithFiles(e) {
+  if (!e.dataTransfer || !e.dataTransfer.types) return false;
+  return Array.from(e.dataTransfer.types).includes('Files');
+}
 
 function jumpToSite(path) {
   if (path) {
@@ -436,6 +504,7 @@ function updateBreadcrumbs(path) {
   // Root button
   const rootBtn = document.createElement('button');
   rootBtn.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 text-sky-400 hover:text-sky-300 font-bold transition-all cursor-pointer';
+  rootBtn.style.background = 'transparent';
   rootBtn.innerHTML = '<i data-lucide="home" class="w-3.5 h-3.5"></i>';
   rootBtn.title = 'Root (/)';
   rootBtn.onclick = () => loadDirectory('/');
@@ -446,20 +515,24 @@ function updateBreadcrumbs(path) {
     const thisPath = accum;
 
     const sep = document.createElement('span');
-    sep.className = 'text-slate-600 select-none';
-    sep.innerHTML = '<i data-lucide="chevron-right" class="w-3 h-3"></i>';
+    sep.className = 'text-slate-600 select-none font-mono text-xs';
+    sep.textContent = '/';
     container.appendChild(sep);
 
-    const btn = document.createElement('button');
     const isLast = (idx === parts.length - 1);
-    btn.className = isLast
-      ? 'px-2 py-0.5 rounded bg-sky-950/60 border border-sky-600/40 text-sky-300 font-bold select-none cursor-default'
-      : 'px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-sky-400 transition-all cursor-pointer';
-    btn.textContent = p;
-    if (!isLast) {
+    if (isLast) {
+      const activeSpan = document.createElement('span');
+      activeSpan.className = 'px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 font-bold select-none text-xs font-mono';
+      activeSpan.textContent = p;
+      container.appendChild(activeSpan);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-sky-400 transition-all cursor-pointer text-xs font-mono';
+      btn.style.background = 'transparent';
+      btn.textContent = p;
       btn.onclick = () => loadDirectory(thisPath);
+      container.appendChild(btn);
     }
-    container.appendChild(btn);
   });
 
   if (window.renderLucideIcons) window.renderLucideIcons();
@@ -585,9 +658,9 @@ function updateDirStats(displayItems, totalCount) {
 
   const statsEl = document.getElementById('dirStatsText');
   if (displayItems.length !== totalCount) {
-    statsEl.textContent = `Showing ${displayItems.length} of ${totalCount} items (${dirs} folders, ${files} files)`;
+    statsEl.innerHTML = `Showing <span class="text-sky-400 font-semibold">${displayItems.length}</span> of ${totalCount} items (${dirs} folders, ${files} files)`;
   } else {
-    statsEl.textContent = `${totalCount} items (${dirs} folders, ${files} files) • Total: ${formatSize(totalBytes)}`;
+    statsEl.innerHTML = `<span class="text-slate-100 font-semibold">${totalCount}</span> items (${dirs} folders, ${files} files) • Total: <span class="text-sky-300 font-semibold">${formatSize(totalBytes)}</span>`;
   }
 }
 
@@ -612,7 +685,7 @@ function renderItems(items) {
   }
 
   if (items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 font-mono">No files or folders found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400 font-mono">No files or folders found.</td></tr>';
     return;
   }
 
@@ -642,54 +715,54 @@ function renderItems(items) {
       <td class="w-10 px-4 py-2.5 text-center">
         <input type="checkbox" onchange="toggleItemSelect('${escapePath(item.path)}', this.checked)" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-slate-700 bg-dark-950 text-sky-500 focus:ring-0 cursor-pointer">
       </td>
-      <td class="px-4 py-2.5 font-medium text-slate-200">
+      <td class="px-4 py-2.5 font-medium text-slate-100">
         <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="${item.is_dir ? `loadDirectory('${escapePath(item.path)}')` : (item.is_archive ? `openExtractModal('${escapePath(item.path)}')` : `openEditor('${escapePath(item.path)}')`)}">
           <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor} flex-shrink-0"></i>
           <span class="hover:text-sky-400 transition-all font-mono text-[12px] truncate max-w-md">${item.name}</span>
-          ${item.is_archive ? `<span class="px-1.5 py-0.2 rounded bg-purple-950/80 border border-purple-500/40 text-[9px] text-purple-300 font-mono">ARCHIVE</span>` : ''}
+          ${item.is_archive ? `<span class="px-1.5 py-0.5 rounded bg-purple-950 border border-purple-500/50 text-[10px] text-purple-300 font-mono font-semibold">ARCHIVE</span>` : ''}
         </div>
       </td>
-      <td class="px-4 py-2.5 text-slate-400 font-mono text-[11px] whitespace-nowrap">${item.is_dir ? '-' : item.size_str}</td>
+      <td class="px-4 py-2.5 text-slate-300 font-mono text-[11px] whitespace-nowrap">${item.is_dir ? '-' : item.size_str}</td>
       <td class="px-4 py-2.5 whitespace-nowrap">
-        <span class="px-2 py-0.5 rounded bg-dark-900 border border-slate-700/60 font-mono text-[10px] text-slate-400 select-all">${item.mode}</span>
+        <span class="px-2 py-0.5 rounded bg-dark-950 border border-slate-700 font-mono text-[10px] text-slate-300 select-all">${item.mode}</span>
       </td>
-      <td class="px-4 py-2.5 text-slate-400 text-[11px] whitespace-nowrap">${item.mod_time}</td>
+      <td class="px-4 py-2.5 text-slate-300 text-[11px] whitespace-nowrap">${item.mod_time}</td>
       <td class="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
         ${item.is_archive ? `
-          <button onclick="openExtractModal('${escapePath(item.path)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/50 text-[11px] font-medium transition-all cursor-pointer shadow-sm">
+          <button onclick="openExtractModal('${escapePath(item.path)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition-all cursor-pointer shadow-sm">
             <i data-lucide="package" class="w-3 h-3"></i>
             <span>Extract</span>
           </button>
         ` : ''}
 
         ${item.is_dir ? `
-          <button onclick="loadDirectory('${escapePath(item.path)}')" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+          <button onclick="loadDirectory('${escapePath(item.path)}')" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-[11px] font-medium border border-slate-700 transition-all cursor-pointer">
             Open
           </button>
-          <button onclick="openArchiveModalSingle('${escapePath(item.name)}')" title="Compress folder" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-purple-900/40 text-purple-300 text-[11px] border border-slate-700 transition-all cursor-pointer">
+          <button onclick="openArchiveModalSingle('${escapePath(item.name)}')" title="Compress folder" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-purple-600 text-purple-300 hover:text-white text-[11px] font-medium border border-purple-500/40 transition-all cursor-pointer">
             Archive
           </button>
         ` : `
           ${isCodeExt(item.ext) ? `
-            <button onclick="openEditor('${escapePath(item.path)}')" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+            <button onclick="openEditor('${escapePath(item.path)}')" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-[11px] font-medium border border-slate-700 transition-all cursor-pointer">
               Edit
             </button>
           ` : ''}
           ${!item.is_archive ? `
-            <button onclick="openArchiveModalSingle('${escapePath(item.name)}')" title="Compress file" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-purple-900/40 text-purple-300 text-[11px] border border-slate-700 transition-all cursor-pointer">
+            <button onclick="openArchiveModalSingle('${escapePath(item.name)}')" title="Compress file" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-purple-600 text-purple-300 hover:text-white text-[11px] font-medium border border-purple-500/40 transition-all cursor-pointer">
               Archive
             </button>
           ` : ''}
-          <a href="/api/files/download?path=${encodeURIComponent(item.path)}" title="Download" class="inline-block px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700 transition-all">
+          <a href="/api/files/download?path=${encodeURIComponent(item.path)}" title="Download" class="inline-block px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 text-slate-200 hover:text-white text-[11px] font-medium border border-slate-700 transition-all">
             Download
           </a>
         `}
 
-        <button onclick="openRenameModal('${escapePath(item.path)}', '${escapePath(item.name)}')" title="Rename" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700 transition-all cursor-pointer">
+        <button onclick="openRenameModal('${escapePath(item.path)}', '${escapePath(item.name)}')" title="Rename" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 text-slate-200 hover:text-white text-[11px] font-medium border border-slate-700 transition-all cursor-pointer">
           Rename
         </button>
 
-        <button onclick="deleteSingleItem('${escapePath(item.path)}', '${escapePath(item.name)}')" title="Delete" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+        <button onclick="deleteSingleItem('${escapePath(item.path)}', '${escapePath(item.name)}')" title="Delete" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-rose-600 text-rose-400 hover:text-white text-[11px] font-medium border border-rose-500/40 transition-all cursor-pointer">
           Delete
         </button>
       </td>
@@ -824,7 +897,7 @@ function openArchiveModalForSelection() {
   const items = Array.from(selectedPaths).map(p => p.split('/').filter(Boolean).pop());
   items.forEach(name => {
     const itemEl = document.createElement('div');
-    itemEl.className = 'flex items-center gap-1.5 text-slate-300';
+    itemEl.className = 'flex items-center gap-1.5 text-slate-200';
     itemEl.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-purple-400"></i><span>${name}</span>`;
     listContainer.appendChild(itemEl);
   });
@@ -849,7 +922,6 @@ function openArchiveModalForSelection() {
 function updateArchiveExtension(format) {
   const input = document.getElementById('archiveFileNameInput');
   let val = input.value;
-  // strip existing archive extension
   val = val.replace(/\.(zip|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar)$/i, '');
   if (!val) val = 'archive';
   input.value = val + '.' + format;
@@ -1041,7 +1113,7 @@ async function deleteSingleItem(path, name) {
       showToast('Delete failed: ' + err, 'error');
     }
   } catch (e) {
-    showToast('Network error: ' + e, 'error');
+    showToast('Network error: ' + err, 'error');
   }
 }
 
@@ -1067,13 +1139,20 @@ async function confirmBatchDelete() {
       showToast('Delete failed: ' + err, 'error');
     }
   } catch (e) {
-    showToast('Network error: ' + e, 'error');
+    showToast('Network error: ' + err, 'error');
   }
 }
 
-async function handleFileUpload(input) {
+function handleFileInputChange(input) {
   if (!input.files || input.files.length === 0) return;
-  const files = Array.from(input.files);
+  uploadFilesList(Array.from(input.files));
+  input.value = '';
+}
+
+async function uploadFilesList(files) {
+  if (!files || files.length === 0) return;
+
+  showToast(`Uploading ${files.length} file${files.length > 1 ? 's' : ''}...`, 'info');
 
   let successCount = 0;
   let failCount = 0;
@@ -1098,9 +1177,8 @@ async function handleFileUpload(input) {
     }
   }
 
-  input.value = '';
   if (successCount > 0) {
-    showToast(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}!`, 'success');
+    showToast(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''} successfully!`, 'success');
     loadDirectory(currentPath);
   }
   if (failCount > 0) {
