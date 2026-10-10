@@ -585,9 +585,63 @@ func (s *Server) getServiceDiagnosticInfo(ctx context.Context, svc string) strin
 			b.WriteString("\n--- Proses yang Menggunakan Port 80 (sockstat) ---\n")
 			b.WriteString(sockRes.Stdout + "\n")
 		}
+
+	case "postgresql":
+		pgLogs := []string{
+			"/var/db/postgres/data16/log",
+			"/var/db/postgres/data16/current_log",
+			"/var/log/postgresql.log",
+		}
+		for _, logPath := range pgLogs {
+			if tail := readLogTail(logPath, 25); tail != "" {
+				b.WriteString("\n--- Log PostgreSQL (" + logPath + ") ---\n" + tail + "\n")
+				break
+			}
+		}
+		if _, err := os.Stat("/var/db/postgres/data16"); os.IsNotExist(err) {
+			b.WriteString("\n--- Info PostgreSQL ---\nDirektori cluster /var/db/postgres/data16 belum diinisialisasi.\n")
+		}
 	}
 
 	return strings.TrimSpace(b.String())
+}
+
+// ensurePostgreSQLReady initializes the PostgreSQL database cluster if not already present.
+func (s *Server) ensurePostgreSQLReady(ctx context.Context) error {
+	// 1. Clean up invalid entries in /etc/rc.conf
+	s.serviceMgr.CleanInvalidRCVars(ctx)
+
+	// 2. Enable postgresql in /etc/rc.conf
+	_ = s.serviceMgr.Enable(ctx, "postgresql")
+
+	// 3. Check if PostgreSQL data directory exists
+	dataDirs := []string{"/var/db/postgres/data16", "/var/db/postgres/data"}
+	needsInit := true
+	for _, dir := range dataDirs {
+		pgVersionFile := filepath.Join(dir, "PG_VERSION")
+		if _, err := os.Stat(pgVersionFile); err == nil {
+			needsInit = false
+			break
+		}
+	}
+
+	if needsInit {
+		// Ensure base directory exists with proper permissions
+		_ = os.MkdirAll("/var/db/postgres", 0700)
+		_, _ = s.exec.Execute(ctx, "/usr/sbin/chown", "-R", "postgres:postgres", "/var/db/postgres")
+
+		// First try native FreeBSD rc.d initdb
+		_, err := s.exec.Execute(ctx, "/usr/sbin/service", "postgresql", "oneinitdb")
+		if err != nil {
+			_, err = s.exec.Execute(ctx, "/usr/sbin/service", "postgresql", "initdb")
+		}
+		if err != nil {
+			// Fallback: run initdb command directly as user 'postgres'
+			_, _ = s.exec.Execute(ctx, "/usr/bin/su", "-l", "postgres", "-c", "/usr/local/bin/initdb -D /var/db/postgres/data16 -U postgres -E UTF8 --locale=C")
+		}
+	}
+
+	return nil
 }
 
 // getApacheListenPort reads the active listen port from /usr/local/etc/apache24/httpd.conf
@@ -728,6 +782,11 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 			targetPort = getApacheListenPort()
 		}
 		_ = s.ensureApacheConfigReady(r.Context(), targetPort)
+	}
+
+	// If service is PostgreSQL, ensure database cluster is initialized
+	if svc == "postgresql" && (req.Action == "start" || req.Action == "restart") {
+		_ = s.ensurePostgreSQLReady(r.Context())
 	}
 
 	// 2. Web server conflict detection on start / restart
@@ -953,6 +1012,11 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 				_ = os.WriteFile(confPath, []byte(content+"\nServerName localhost:80\n"), 0644)
 			}
 		}
+	}
+
+	// Setup for PostgreSQL: ensure cluster initialized
+	if rcService == "postgresql" {
+		_ = s.ensurePostgreSQLReady(r.Context())
 	}
 
 	w.Header().Set("Content-Type", "application/json")

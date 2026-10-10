@@ -579,6 +579,63 @@ async function resolveWebServerConflict(mode, targetSvc = null, conflictSvc = nu
   await loadServices();
 }
 
+function copyToClipboard(text) {
+  // If modern navigator.clipboard is supported and in a secure context (HTTPS / localhost)
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+
+  // Reliable fallback for plain HTTP context (e.g. http://103.150.92.38:8880)
+  return new Promise((resolve, reject) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      textarea.setAttribute('readonly', '');
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (successful) {
+        resolve();
+      } else {
+        reject(new Error('Browser execCommand copy gagal'));
+      }
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function copyErrorDetails() {
+  const details = document.getElementById('errorModalDetails').textContent || '';
+  const message = document.getElementById('errorModalMessage').textContent || '';
+  const fullText = (message ? message + '\n\n' : '') + details;
+
+  if (!fullText.trim()) return;
+
+  copyToClipboard(fullText)
+    .then(() => {
+      const textEl = document.getElementById('copyDetailsText');
+      if (textEl) {
+        textEl.textContent = 'Tersalin!';
+        textEl.classList.add('text-emerald-400');
+        setTimeout(() => {
+          textEl.textContent = 'Salin Log';
+          textEl.classList.remove('text-emerald-400');
+        }, 2000);
+      }
+      showToast('Log error berhasil disalin ke clipboard!', 'success');
+    })
+    .catch((err) => {
+      console.warn('Clipboard copy fallback:', err);
+      window.prompt('Salin teks log berikut secara manual (Ctrl+C):', fullText);
+    });
+}
+
 function showErrorModal(title, subtitle, message, details, conflictData = null) {
   document.getElementById('errorModalTitle').textContent = title || 'Terjadi Kesalahan';
   document.getElementById('errorModalSubtitle').textContent = subtitle || 'Diagnostik Sistem FreeBSD';
@@ -593,16 +650,14 @@ function showErrorModal(title, subtitle, message, details, conflictData = null) 
     detailsContainer.classList.add('hidden');
   }
 
-  // Conflict Action Buttons inside error modal
+  // Conflict Action Buttons inside error modal (ONLY show for actual web server conflicts!)
   const conflictActions = document.getElementById('errorModalConflictActions');
   if (conflictActions) {
-    if (conflictData || (message && message.includes('Konflik Port'))) {
-      currentConflictData = conflictData || {
-        target_service: 'apache24',
-        conflict_service: 'nginx',
-        target_name: 'Apache 2.4',
-        conflict_name: 'Nginx'
-      };
+    const isWebConflict = conflictData && conflictData.is_conflict === true &&
+      ['nginx', 'apache24', 'apache', 'caddy', 'openlitespeed'].includes(conflictData.target_service);
+
+    if (isWebConflict) {
+      currentConflictData = conflictData;
       conflictActions.classList.remove('hidden');
     } else {
       conflictActions.classList.add('hidden');
@@ -616,19 +671,6 @@ function showErrorModal(title, subtitle, message, details, conflictData = null) 
 
 function closeErrorModal() {
   document.getElementById('serviceErrorModal').classList.add('hidden');
-}
-
-function copyErrorDetails() {
-  const details = document.getElementById('errorModalDetails').textContent;
-  const message = document.getElementById('errorModalMessage').textContent;
-  const fullText = (message ? message + '\n\n' : '') + details;
-  navigator.clipboard.writeText(fullText).then(() => {
-    const textEl = document.getElementById('copyDetailsText');
-    if (textEl) {
-      textEl.textContent = 'Tersalin!';
-      setTimeout(() => { textEl.textContent = 'Salin Log'; }, 2000);
-    }
-  });
 }
 
 async function executeServiceAction(btn, serviceName, action) {
@@ -678,7 +720,7 @@ async function executeServiceAction(btn, serviceName, action) {
         `FreeBSD rc.d Service Manager (${serviceName})`,
         errMsg,
         errDetails,
-        data
+        (data && data.is_conflict) ? data : null
       );
       await loadServices();
     }

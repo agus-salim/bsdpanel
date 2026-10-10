@@ -66,10 +66,18 @@ func (s *ServiceManager) Reload(ctx context.Context, serviceName string) error {
 	return s.action(ctx, serviceName, "reload")
 }
 
+// CleanInvalidRCVars removes malformed entries from /etc/rc.conf (such as those containing hyphens).
+func (s *ServiceManager) CleanInvalidRCVars(ctx context.Context) {
+	// Removes invalid "php-fpm_enable" which causes sh syntax errors in /etc/rc.conf
+	_, _ = s.exec.Execute(ctx, "/usr/sbin/sysrc", "-x", "php-fpm_enable")
+}
+
 // Enable configures the service to boot automatically via sysrc.
 func (s *ServiceManager) Enable(ctx context.Context, serviceName string) error {
+	s.CleanInvalidRCVars(ctx)
+	rcVar := strings.ReplaceAll(serviceName, "-", "_")
 	cmd := "/usr/sbin/sysrc"
-	args := []string{fmt.Sprintf("%s_enable=YES", serviceName)}
+	args := []string{fmt.Sprintf("%s_enable=YES", rcVar)}
 	if s.exec.UseDoas {
 		args = append([]string{cmd}, args...)
 		cmd = "/usr/local/bin/doas"
@@ -80,8 +88,10 @@ func (s *ServiceManager) Enable(ctx context.Context, serviceName string) error {
 
 // Disable turns off auto-start in /etc/rc.conf.
 func (s *ServiceManager) Disable(ctx context.Context, serviceName string) error {
+	s.CleanInvalidRCVars(ctx)
+	rcVar := strings.ReplaceAll(serviceName, "-", "_")
 	cmd := "/usr/sbin/sysrc"
-	args := []string{fmt.Sprintf("%s_enable=NO", serviceName)}
+	args := []string{fmt.Sprintf("%s_enable=NO", rcVar)}
 	if s.exec.UseDoas {
 		args = append([]string{cmd}, args...)
 		cmd = "/usr/local/bin/doas"
@@ -92,7 +102,8 @@ func (s *ServiceManager) Disable(ctx context.Context, serviceName string) error 
 
 // IsEnabled checks if rc.conf has the service enabled.
 func (s *ServiceManager) IsEnabled(ctx context.Context, serviceName string) bool {
-	res, err := s.exec.Execute(ctx, "/usr/sbin/sysrc", "-n", fmt.Sprintf("%s_enable", serviceName))
+	rcVar := strings.ReplaceAll(serviceName, "-", "_")
+	res, err := s.exec.Execute(ctx, "/usr/sbin/sysrc", "-n", fmt.Sprintf("%s_enable", rcVar))
 	if err != nil {
 		return false
 	}
