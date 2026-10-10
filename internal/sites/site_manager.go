@@ -100,7 +100,8 @@ func (m *SiteManager) CreateSite(ctx context.Context, site *Site) error {
 	_ = os.WriteFile(indexFile, []byte(starterContent), 0644)
 	_, _ = m.exec.Execute(ctx, "/usr/sbin/chown", fmt.Sprintf("%s:%s", site.SystemUser, site.SystemUser), indexFile)
 
-	// Step 3: Generate PHP-FPM Pool configuration isolated for this user
+	// Step 3: Ensure PHP configured & generate PHP-FPM Pool configuration
+	_ = m.EnsurePHPConfigured(ctx)
 	if err := m.generatePHPFPMPool(site); err != nil {
 		return fmt.Errorf("php pool error: %w", err)
 	}
@@ -124,10 +125,10 @@ func (m *SiteManager) generatePHPFPMPool(site *Site) error {
 	confContent := fmt.Sprintf(`; Isolated PHP-FPM pool for %s
 [%s]
 user = %s
-group = %s
+group = www
 
 listen = %s
-listen.owner = %s
+listen.owner = www
 listen.group = www
 listen.mode = 0660
 
@@ -141,10 +142,10 @@ chdir = %s
 php_admin_value[open_basedir] = /usr/home/%s:/tmp:/var/tmp
 php_admin_value[session.save_path] = /tmp
 php_admin_value[upload_tmp_dir] = /tmp
-`, site.Domain, site.SystemUser, site.SystemUser, site.SystemUser, sockPath, site.SystemUser, site.DocumentRoot, site.SystemUser)
+`, site.Domain, site.SystemUser, site.SystemUser, sockPath, site.DocumentRoot, site.SystemUser)
 
-	confFile := filepath.Join(m.phpPoolDir, fmt.Sprintf("%s.conf", site.SystemUser))
 	_ = os.MkdirAll(m.phpPoolDir, 0755)
+	confFile := filepath.Join(m.phpPoolDir, fmt.Sprintf("%s.conf", site.SystemUser))
 	return os.WriteFile(confFile, []byte(confContent), 0644)
 }
 
@@ -293,6 +294,7 @@ func (m *SiteManager) UpdateSite(ctx context.Context, updated *Site) error {
 	existing.SSLEnabled = updated.SSLEnabled
 
 	// Regenerate configs
+	_ = m.EnsurePHPConfigured(ctx)
 	if err := m.generatePHPFPMPool(existing); err != nil {
 		return fmt.Errorf("php pool error: %w", err)
 	}
@@ -364,34 +366,34 @@ func (m *SiteManager) EnsurePHPConfigured(ctx context.Context) error {
 	_ = os.MkdirAll("/usr/local/etc/php-fpm.d", 0755)
 
 	mainConf := "/usr/local/etc/php-fpm.conf"
-	defaultConf := "/usr/local/etc/php-fpm.conf.default"
 
-	// 1. If php-fpm.conf does not exist, copy from default or create clean minimal config
-	if _, err := os.Stat(mainConf); os.IsNotExist(err) {
-		if content, err := os.ReadFile(defaultConf); err == nil {
-			_ = os.WriteFile(mainConf, content, 0644)
-		} else {
-			minimal := `[global]
+	// 1. If php-fpm.conf does not exist, create clean global config
+	content, err := os.ReadFile(mainConf)
+	if err != nil || len(content) == 0 {
+		minimal := `[global]
 pid = /var/run/php-fpm.pid
 error_log = /var/log/php-fpm.log
 log_level = notice
+daemonize = yes
 include = /usr/local/etc/php-fpm.d/*.conf
 `
-			_ = os.WriteFile(mainConf, []byte(minimal), 0644)
-		}
-	}
-
-	// 2. Ensure include = /usr/local/etc/php-fpm.d/*.conf is uncommented
-	if content, err := os.ReadFile(mainConf); err == nil {
+		_ = os.WriteFile(mainConf, []byte(minimal), 0644)
+	} else {
 		str := string(content)
 		modified := false
 		if strings.Contains(str, ";include=/usr/local/etc/php-fpm.d/*.conf") {
 			str = strings.ReplaceAll(str, ";include=/usr/local/etc/php-fpm.d/*.conf", "include=/usr/local/etc/php-fpm.d/*.conf")
 			modified = true
-		} else if strings.Contains(str, ";include = /usr/local/etc/php-fpm.d/*.conf") {
+		}
+		if strings.Contains(str, ";include = /usr/local/etc/php-fpm.d/*.conf") {
 			str = strings.ReplaceAll(str, ";include = /usr/local/etc/php-fpm.d/*.conf", "include = /usr/local/etc/php-fpm.d/*.conf")
 			modified = true
-		} else if !strings.Contains(str, "php-fpm.d/*.conf") {
+		}
+		if strings.Contains(str, ";include=etc/php-fpm.d/*.conf") {
+			str = strings.ReplaceAll(str, ";include=etc/php-fpm.d/*.conf", "include=/usr/local/etc/php-fpm.d/*.conf")
+			modified = true
+		}
+		if !strings.Contains(str, "php-fpm.d/*.conf") {
 			str += "\ninclude = /usr/local/etc/php-fpm.d/*.conf\n"
 			modified = true
 		}
@@ -400,7 +402,7 @@ include = /usr/local/etc/php-fpm.d/*.conf
 		}
 	}
 
-	// 3. Ensure php_fpm is enabled in /etc/rc.conf
+	// 2. Ensure php_fpm is enabled in /etc/rc.conf
 	_, _ = m.exec.Execute(ctx, "/usr/sbin/sysrc", "php_fpm_enable=YES")
 
 	return nil
@@ -408,15 +410,21 @@ include = /usr/local/etc/php-fpm.d/*.conf
 
 // restartPHP restarts FreeBSD php-fpm daemon using canonical and version-tagged service names.
 func (m *SiteManager) restartPHP(ctx context.Context, version string) error {
-	// Canonical FreeBSD rc service
-	_, _ = m.exec.Execute(ctx, "/usr/sbin/service", "php-fpm", "onerestart")
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/sysrc", "php_fpm_enable=YES")
+
+	// Standard service start / restart
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/service", "php-fpm", "restart")
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/service", "php-fpm", "start")
 	_, _ = m.exec.Execute(ctx, "/usr/sbin/service", "php-fpm", "onestart")
 
 	// Versioned service (e.g. php83-fpm) if custom port
 	if version != "" {
 		tag := strings.ReplaceAll(version, ".", "")
 		svcName := fmt.Sprintf("php%s-fpm", tag)
-		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "onerestart")
+		rcVar := fmt.Sprintf("php%s_fpm_enable=YES", tag)
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/sysrc", rcVar)
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "restart")
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "start")
 		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "onestart")
 	}
 
