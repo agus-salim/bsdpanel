@@ -76,27 +76,6 @@
     </div>
   </div>
 
-  <!-- Security & Administrative Privilege Badge -->
-  <div class="bg-dark-800 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
-        <i data-lucide="shield" class="w-5 h-5"></i>
-      </div>
-      <div>
-        <h2 class="text-sm font-semibold text-slate-100">Root Administrative Authority Active</h2>
-        <p class="text-xs text-slate-400 mt-0.5">
-          BSD Panel operates with full system root administrator privileges. You can manage FreeBSD services, pkg repositories, firewall rules, and virtual hosts without barriers.
-        </p>
-      </div>
-    </div>
-    <div class="flex items-center gap-2">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-        Privilege: Root
-      </span>
-    </div>
-  </div>
-
   <!-- Managed Sites Section -->
   <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
     <div class="p-4 border-b border-slate-700/60 flex items-center justify-between bg-dark-850">
@@ -133,8 +112,11 @@
                   <i data-lucide="external-link" class="w-3 h-3 text-slate-500"></i>
                 </a>
               </td>
-              <td class="px-4 py-3 font-mono text-slate-300">
-                <span class="px-2 py-0.5 rounded bg-dark-900 border border-slate-700 text-[11px]">{{.SystemUser}}</span>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 text-xs font-mono font-medium">
+                  <i data-lucide="user" class="w-3 h-3 text-sky-400"></i>
+                  <span>{{.SystemUser}}</span>
+                </span>
               </td>
               <td class="px-4 py-3 uppercase font-semibold text-slate-400">{{.WebServer}}</td>
               <td class="px-4 py-3 font-mono text-sky-400">PHP {{.PHPVersion}}</td>
@@ -149,18 +131,18 @@
               </td>
               <td class="px-4 py-3 text-right whitespace-nowrap">
                 <div class="inline-flex items-center gap-1.5 justify-end">
-                  <a href="http://{{.Domain}}" target="_blank" title="Buka Situs (http://{{.Domain}})" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-sky-400 border border-slate-700 transition-all">
-                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-                  </a>
                   <a href="/files?path={{.DocumentRoot}}" title="File Manager ({{.DocumentRoot}})" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-amber-400 border border-slate-700 transition-all">
                     <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+                  </a>
+                  <a href="/databases?user={{.SystemUser}}&site={{.Domain}}" title="Kelola Database Situs ({{.Domain}})" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-indigo-400 border border-slate-700 transition-all">
+                    <i data-lucide="database" class="w-3.5 h-3.5"></i>
                   </a>
                   <button type="button" onclick="openEditSiteModal('{{.Domain}}', '{{.SystemUser}}', '{{.WebServer}}', '{{.PHPVersion}}', {{.SSLEnabled}}, {{.IsReverseProxy}}, '{{.ProxyUpstream}}')" title="Edit Pengaturan Situs" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-sky-400 border border-slate-700 transition-all cursor-pointer">
                     <i data-lucide="edit" class="w-3.5 h-3.5"></i>
                   </button>
-                  <a href="/terminal?site={{.Domain}}" title="Lihat Logs & Terminal" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-emerald-400 border border-slate-700 transition-all">
-                    <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
-                  </a>
+                  <button type="button" onclick="openSiteLogsModal('{{.Domain}}', '{{.SystemUser}}')" title="Lihat Log Situs (Access & Error)" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-emerald-400 border border-slate-700 transition-all cursor-pointer">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                  </button>
                   <a href="/sites" title="Buka Manajemen Situs Lengkap" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-slate-300 border border-slate-700 transition-all">
                     <i data-lucide="settings" class="w-3.5 h-3.5"></i>
                   </a>
@@ -265,9 +247,109 @@
       </form>
     </div>
   </div>
+
+  <!-- Site Logs Modal Card -->
+  <div id="siteLogsModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-800 border border-slate-700/80 rounded-xl p-5 shadow-2xl max-w-3xl w-full flex flex-col max-h-[85vh] transition-all">
+      <div class="border-b border-slate-700/80 pb-3 mb-3 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <span>Log Aktivitas:</span>
+              <span id="logDomainTitle" class="text-sky-400 font-mono"></span>
+            </h3>
+            <p class="text-[11px] text-slate-400 font-mono" id="logPathSubtitle">/usr/home/.../logs/access.log</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeSiteLogsModal()" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded bg-dark-900 border border-slate-700 cursor-pointer">
+          Tutup &times;
+        </button>
+      </div>
+
+      <!-- Log Type Tabs & Controls -->
+      <div class="flex items-center justify-between mb-3 flex-shrink-0">
+        <div class="flex items-center gap-1.5 bg-dark-900 p-1 rounded-lg border border-slate-700/60 text-xs">
+          <button type="button" id="tabAccessLog" onclick="switchLogType('access')" class="px-3 py-1 rounded-md font-medium transition-all bg-sky-600 text-white cursor-pointer">
+            Access Log
+          </button>
+          <button type="button" id="tabErrorLog" onclick="switchLogType('error')" class="px-3 py-1 rounded-md font-medium transition-all text-slate-400 hover:text-slate-200 cursor-pointer">
+            Error Log
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="fetchSiteLogs()" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-dark-700 text-slate-300 border border-slate-700 transition-all cursor-pointer">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-sky-400"></i>
+            <span>Refresh</span>
+          </button>
+          <a id="logTerminalLink" href="/terminal" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-dark-700 text-slate-300 border border-slate-700 transition-all">
+            <i data-lucide="terminal" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Buka di Terminal</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Log View Box -->
+      <div class="flex-1 overflow-hidden flex flex-col">
+        <pre id="logContentBox" class="flex-1 bg-dark-950 border border-slate-800 rounded-lg p-3 font-mono text-[11px] text-slate-300 overflow-y-auto whitespace-pre-wrap select-text leading-relaxed min-h-[300px]">Memuat log...</pre>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
+let currentLogDomain = '';
+let currentLogType = 'access';
+
+function openSiteLogsModal(domain, user) {
+  currentLogDomain = domain;
+  currentLogType = 'access';
+  document.getElementById('logDomainTitle').textContent = domain;
+  document.getElementById('logTerminalLink').href = '/terminal?site=' + encodeURIComponent(domain);
+  document.getElementById('siteLogsModal').classList.remove('hidden');
+  switchLogType('access');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function closeSiteLogsModal() {
+  document.getElementById('siteLogsModal').classList.add('hidden');
+}
+
+function switchLogType(type) {
+  currentLogType = type;
+  const tabAccess = document.getElementById('tabAccessLog');
+  const tabError = document.getElementById('tabErrorLog');
+  if (type === 'access') {
+    tabAccess.className = 'px-3 py-1 rounded-md font-medium transition-all bg-sky-600 text-white cursor-pointer';
+    tabError.className = 'px-3 py-1 rounded-md font-medium transition-all text-slate-400 hover:text-slate-200 cursor-pointer';
+  } else {
+    tabError.className = 'px-3 py-1 rounded-md font-medium transition-all bg-sky-600 text-white cursor-pointer';
+    tabAccess.className = 'px-3 py-1 rounded-md font-medium transition-all text-slate-400 hover:text-slate-200 cursor-pointer';
+  }
+  fetchSiteLogs();
+}
+
+async function fetchSiteLogs() {
+  const box = document.getElementById('logContentBox');
+  const pathLabel = document.getElementById('logPathSubtitle');
+  box.textContent = 'Memuat log ' + currentLogType + ' untuk ' + currentLogDomain + '...';
+
+  try {
+    const res = await fetch(`/api/logs?domain=${encodeURIComponent(currentLogDomain)}&type=${currentLogType}`);
+    const data = await res.json();
+    if (data.path) {
+      pathLabel.textContent = data.path;
+    }
+    box.textContent = data.content || '(File log kosong)';
+    box.scrollTop = box.scrollHeight;
+  } catch (err) {
+    box.textContent = 'Gagal memuat log: ' + err;
+  }
+}
+
 function toggleEditProxyField() {
   const isChecked = document.getElementById('edit_is_reverse_proxy').checked;
   const field = document.getElementById('editProxyField');

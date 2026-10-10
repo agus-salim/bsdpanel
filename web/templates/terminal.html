@@ -79,5 +79,33 @@ async function handleTermSubmit(e) {
 
   output.scrollTop = output.scrollHeight;
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const site = params.get('site');
+  if (site) {
+    const banner = document.createElement('div');
+    banner.className = 'p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-xs text-slate-300 flex items-center justify-between mb-3';
+    banner.innerHTML = `
+      <div class="flex items-center gap-2">
+        <i data-lucide="file-text" class="w-4 h-4 text-sky-400"></i>
+        <span>Log Khusus Situs: <strong class="text-white">${site}</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="runQuickCmd('tail -n 50 /usr/home/u_' + '${site}'.split('.')[0] + '/logs/access.log')" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 border border-slate-700 text-sky-300 text-[11px] cursor-pointer">Access Log</button>
+        <button type="button" onclick="runQuickCmd('tail -n 50 /usr/home/u_' + '${site}'.split('.')[0] + '/logs/error.log')" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 border border-slate-700 text-amber-300 text-[11px] cursor-pointer">Error Log</button>
+        <button type="button" onclick="runQuickCmd('tail -n 50 /var/log/nginx/error.log')" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 border border-slate-700 text-rose-300 text-[11px] cursor-pointer">Nginx Error</button>
+      </div>
+    `;
+    const container = document.querySelector('.space-y-4');
+    container.insertBefore(banner, container.children[1]);
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+});
+
+function runQuickCmd(cmd) {
+  document.getElementById('termCmd').value = cmd;
+  document.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
+}
 </script>
 {{end}}

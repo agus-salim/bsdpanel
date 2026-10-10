@@ -489,7 +489,7 @@ func (s *Server) handleAPILogs(w http.ResponseWriter, r *http.Request) {
 	domain := r.URL.Query().Get("domain")
 	logType := r.URL.Query().Get("type") // access, error
 
-	if domain == "" || strings.ContainsAny(domain, "/\\..") {
+	if domain == "" || strings.ContainsAny(domain, "/\\") {
 		http.Error(w, "invalid domain", http.StatusBadRequest)
 		return
 	}
@@ -499,14 +499,36 @@ func (s *Server) handleAPILogs(w http.ResponseWriter, r *http.Request) {
 		fileName = "error.log"
 	}
 
-	sitePath := fmt.Sprintf("/usr/home/%s/logs/%s", domain, fileName)
-	data, err := os.ReadFile(sitePath)
-	if err != nil {
-		data = []byte(fmt.Sprintf("Log file empty or not found: %s", sitePath))
+	site, err := s.siteMgr.GetSite(domain)
+	var logPath string
+	if err == nil && site.SystemUser != "" {
+		logPath = filepath.Join("/usr/home", site.SystemUser, "logs", fileName)
+	} else {
+		logPath = filepath.Join("/var/log/nginx", fileName)
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	_, _ = w.Write(data)
+	res, err := s.exec.Execute(r.Context(), "/usr/bin/tail", "-n", "200", logPath)
+	var content string
+	if err == nil && strings.TrimSpace(res.Stdout) != "" {
+		content = res.Stdout
+	} else {
+		// If user site log is empty, check global nginx log as fallback
+		globalPath := filepath.Join("/var/log/nginx", fileName)
+		if globalRes, gErr := s.exec.Execute(r.Context(), "/usr/bin/tail", "-n", "80", globalPath); gErr == nil && strings.TrimSpace(globalRes.Stdout) != "" {
+			content = fmt.Sprintf("--- Log Khusus Situs Masih Bersih (Belum ada request baru) ---\nFile: %s\n\n--- Catatan Global Nginx (%s) ---\n%s", logPath, globalPath, globalRes.Stdout)
+		} else {
+			content = fmt.Sprintf("--- Log %s untuk %s ---\nFile: %s\n(File log kosong atau belum ada catatan aktivitas)", strings.ToUpper(logType), domain, logPath)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"domain":   domain,
+		"log_type": logType,
+		"path":     logPath,
+		"content":  content,
+	})
 }
 
 // getFreeBSDStats collects real hardware and runtime metrics on FreeBSD.

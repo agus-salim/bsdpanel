@@ -75,10 +75,25 @@ async function handleCreateDB(e) {
     } else {
       const err = await res.text();
       alert(`Failed to create database: ${err}`);
-    }
   } catch (err) {
     alert('Network error: ' + err);
   }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const user = params.get('user');
+  const site = params.get('site');
+  if (user) {
+    const dbNameInput = document.getElementById('db_name');
+    const dbUserInput = document.getElementById('db_user');
+    if (dbNameInput && !dbNameInput.value) {
+      dbNameInput.value = user + '_db';
+    }
+    if (dbUserInput && !dbUserInput.value) {
+      dbUserInput.value = user;
+    }
+  }
+});
 </script>
 {{end}}
