@@ -98,7 +98,7 @@ func (m *SiteManager) CreateSite(ctx context.Context, site *Site) error {
 </html>`, site.Domain, site.Domain, site.SystemUser, site.PHPVersion)
 
 	_ = os.WriteFile(indexFile, []byte(starterContent), 0644)
-	_ = m.exec.Execute(ctx, "/usr/sbin/chown", fmt.Sprintf("%s:%s", site.SystemUser, site.SystemUser), indexFile)
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/chown", fmt.Sprintf("%s:%s", site.SystemUser, site.SystemUser), indexFile)
 
 	// Step 3: Generate PHP-FPM Pool configuration isolated for this user
 	if err := m.generatePHPFPMPool(site); err != nil {
