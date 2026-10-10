@@ -147,7 +147,11 @@
                   <span class="text-slate-500">HTTP Only</span>
                 {{end}}
               </td>
-              <td class="px-4 py-3 text-right space-x-2">
+              <td class="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
+                <a href="/files?path={{.DocumentRoot}}" title="File Manager" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-sky-400 hover:text-white transition-all text-[11px] border border-slate-700 font-medium">
+                  <i data-lucide="folder" class="w-3.5 h-3.5 text-amber-400"></i>
+                  <span>Files</span>
+                </a>
                 <a href="/terminal?site={{.Domain}}" class="px-2.5 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-[11px] border border-slate-700">
                   Logs
                 </a>

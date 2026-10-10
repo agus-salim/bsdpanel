@@ -1,0 +1,403 @@
+{{template "layout" .}}
+
+{{define "content"}}
+<div class="space-y-4">
+  <!-- Top Bar: Title & Quick Jump -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div>
+      <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+        <i data-lucide="folder" class="w-5 h-5 text-amber-400"></i>
+        <span>File Manager</span>
+      </h2>
+      <p class="text-xs text-slate-400 mt-0.5">Browse, edit, upload, and manage website files</p>
+    </div>
+
+    <!-- Quick Site Selector -->
+    {{if .Sites}}
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-slate-400 whitespace-nowrap">Jump to Site:</span>
+      <select id="siteJumpSelect" onchange="jumpToSite(this.value)" class="bg-dark-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono">
+        <option value="">-- Select Website --</option>
+        {{range .Sites}}
+        <option value="{{.DocumentRoot}}">{{.Domain}} ({{.DocumentRoot}})</option>
+        {{end}}
+      </select>
+    </div>
+    {{end}}
+  </div>
+
+  <!-- Navigation & Toolbar Card -->
+  <div class="bg-dark-800 border border-slate-700/60 rounded-xl p-3.5 shadow-sm space-y-3">
+    <!-- Path Bar & Action Buttons -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <!-- Breadcrumb Bar -->
+      <div class="flex-1 flex items-center gap-2 bg-dark-950 border border-slate-700/80 rounded-lg px-3 py-1.5 overflow-x-auto text-xs font-mono">
+        <button onclick="goToParent()" title="Go up to parent directory" class="text-slate-400 hover:text-slate-100 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+        </button>
+        <span class="text-slate-500">Path:</span>
+        <div id="breadcrumbTrail" class="flex items-center gap-1 text-slate-300">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="promptNewFile()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer">
+          <i data-lucide="file-plus" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span>New File</span>
+        </button>
+
+        <button onclick="promptNewFolder()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer">
+          <i data-lucide="folder-plus" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>New Folder</span>
+        </button>
+
+        <button onclick="document.getElementById('fileUploadInput').click()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-sm cursor-pointer">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>Upload</span>
+        </button>
+        <input type="file" id="fileUploadInput" onchange="handleFileUpload(this)" class="hidden">
+
+        <button onclick="loadDirectory(currentPath)" title="Refresh" class="p-2 rounded-lg bg-dark-900 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition-all cursor-pointer">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Listing Table Container -->
+  <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-400 font-semibold uppercase tracking-wider">
+          <tr>
+            <th class="px-4 py-3">Name</th>
+            <th class="px-4 py-3">Size</th>
+            <th class="px-4 py-3">Permissions</th>
+            <th class="px-4 py-3">Modified</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="filesTableBody" class="divide-y divide-slate-700/40 text-slate-300">
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+              <div class="flex items-center justify-center gap-2">
+                <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin text-sky-400"></i>
+                <span>Loading directory contents...</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Built-in Code Editor Modal -->
+<div id="editorModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="w-full max-w-5xl bg-dark-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden">
+    <!-- Editor Header -->
+    <div class="p-3.5 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="edit" class="w-4 h-4 text-sky-400"></i>
+        <span id="editorFilePath" class="text-xs font-mono font-medium text-slate-200"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="editorStatus" class="text-xs font-mono text-slate-400"></span>
+        <button onclick="saveCurrentFile()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-sm cursor-pointer">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span>Save File</span>
+        </button>
+        <button onclick="closeEditor()" class="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-100 bg-dark-900 hover:bg-slate-800 border border-slate-700 transition-all cursor-pointer">
+          Close
+        </button>
+      </div>
+    </div>
+
+    <!-- Code Editor Body -->
+    <div class="flex-1 bg-dark-950 p-2 overflow-hidden flex flex-col">
+      <textarea id="editorTextarea" spellcheck="false" class="w-full flex-1 bg-dark-950 text-slate-100 font-mono text-xs p-4 resize-none border-0 focus:outline-none leading-relaxed"></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPath = "{{.CurrentPath}}";
+let parentPath = "/usr/home";
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadDirectory(currentPath);
+});
+
+function jumpToSite(path) {
+  if (path) {
+    loadDirectory(path);
+  }
+}
+
+function updateBreadcrumbs(path) {
+  const container = document.getElementById('breadcrumbTrail');
+  container.innerHTML = '';
+
+  const parts = path.split('/').filter(Boolean);
+  let accum = '';
+
+  // Root button
+  const rootBtn = document.createElement('button');
+  rootBtn.className = 'text-sky-400 hover:underline cursor-pointer font-bold';
+  rootBtn.textContent = '/';
+  rootBtn.onclick = () => loadDirectory('/');
+  container.appendChild(rootBtn);
+
+  parts.forEach((p, idx) => {
+    accum += '/' + p;
+    const thisPath = accum;
+
+    const sep = document.createElement('span');
+    sep.className = 'text-slate-600';
+    sep.textContent = '/';
+    container.appendChild(sep);
+
+    const btn = document.createElement('button');
+    btn.className = (idx === parts.length - 1) ? 'text-slate-100 font-bold' : 'text-sky-400 hover:underline cursor-pointer';
+    btn.textContent = p;
+    btn.onclick = () => loadDirectory(thisPath);
+    container.appendChild(btn);
+  });
+}
+
+function goToParent() {
+  if (parentPath && parentPath !== currentPath) {
+    loadDirectory(parentPath);
+  }
+}
+
+async function loadDirectory(path) {
+  currentPath = path;
+  updateBreadcrumbs(path);
+  const tbody = document.getElementById('filesTableBody');
+  tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Loading directory...</td></tr>';
+
+  try {
+    const res = await fetch(`/api/files/list?path=${encodeURIComponent(path)}`);
+    if (!res.ok) {
+      const err = await res.text();
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-rose-400 font-mono">Error: ${err}</td></tr>`;
+      return;
+    }
+    const data = await res.json();
+    parentPath = data.parent_path || '/';
+    renderItems(data.items || []);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-rose-400 font-mono">Network error: ${err}</td></tr>`;
+  }
+}
+
+function renderItems(items) {
+  const tbody = document.getElementById('filesTableBody');
+  tbody.innerHTML = '';
+
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Directory is empty.</td></tr>';
+    return;
+  }
+
+  items.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-dark-750 transition-all';
+
+    const iconType = item.is_dir ? 'folder' : (isCodeExt(item.ext) ? 'file-text' : 'file');
+    const iconColor = item.is_dir ? 'text-amber-400' : 'text-sky-400';
+
+    tr.innerHTML = `
+      <td class="px-4 py-2.5 font-medium text-slate-200">
+        <div class="flex items-center gap-2 cursor-pointer" onclick="${item.is_dir ? `loadDirectory('${escapePath(item.path)}')` : `openEditor('${escapePath(item.path)}')`}">
+          <i data-lucide="${iconType}" class="w-4 h-4 ${iconColor}"></i>
+          <span class="hover:text-sky-400 transition-all">${item.name}</span>
+        </div>
+      </td>
+      <td class="px-4 py-2.5 text-slate-400 font-mono text-[11px]">${item.is_dir ? '-' : item.size_str}</td>
+      <td class="px-4 py-2.5 text-slate-500 font-mono text-[10px]">${item.mode}</td>
+      <td class="px-4 py-2.5 text-slate-400 text-[11px]">${item.mod_time}</td>
+      <td class="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+        ${!item.is_dir ? `
+          <button onclick="openEditor('${escapePath(item.path)}')" class="px-2 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+            Edit
+          </button>
+          <a href="/api/files/download?path=${encodeURIComponent(item.path)}" class="px-2 py-1 rounded bg-dark-900 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700 transition-all">
+            Download
+          </a>
+        ` : `
+          <button onclick="loadDirectory('${escapePath(item.path)}')" class="px-2 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+            Open
+          </button>
+        `}
+        <button onclick="deleteItem('${escapePath(item.path)}', '${item.name}')" class="px-2 py-1 rounded bg-dark-900 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+          Delete
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function escapePath(str) {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function isCodeExt(ext) {
+  const codeExts = ['.php', '.html', '.htm', '.css', '.js', '.json', '.txt', '.conf', '.env', '.sh', '.xml', '.yml', '.yaml', '.sql', '.htaccess'];
+  return codeExts.includes(ext);
+}
+
+// Built-in Editor functions
+let editingFilePath = '';
+
+async function openEditor(filePath) {
+  editingFilePath = filePath;
+  document.getElementById('editorFilePath').textContent = filePath;
+  document.getElementById('editorStatus').textContent = 'Loading...';
+  document.getElementById('editorModal').classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+    if (!res.ok) {
+      const err = await res.text();
+      alert('Cannot open file: ' + err);
+      closeEditor();
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('editorTextarea').value = data.content;
+    document.getElementById('editorStatus').textContent = `Size: ${(data.size / 1024).toFixed(1)} KB`;
+  } catch (err) {
+    alert('Failed to read file: ' + err);
+    closeEditor();
+  }
+}
+
+function closeEditor() {
+  document.getElementById('editorModal').classList.add('hidden');
+  editingFilePath = '';
+}
+
+async function saveCurrentFile() {
+  if (!editingFilePath) return;
+  const content = document.getElementById('editorTextarea').value;
+  const status = document.getElementById('editorStatus');
+  status.textContent = 'Saving...';
+
+  try {
+    const res = await fetch('/api/files/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: editingFilePath, content })
+    });
+    if (res.ok) {
+      status.textContent = 'Saved successfully!';
+      setTimeout(() => { status.textContent = ''; }, 3000);
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      alert('Failed to save file: ' + err);
+      status.textContent = 'Save failed';
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+    status.textContent = 'Error';
+  }
+}
+
+// File actions
+async function promptNewFile() {
+  const name = prompt('Enter new file name (e.g. info.php, style.css):');
+  if (!name) return;
+
+  try {
+    const res = await fetch('/api/files/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentPath, name, is_dir: false })
+    });
+    if (res.ok) {
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      alert('Error creating file: ' + err);
+    }
+  } catch (e) {
+    alert('Network error: ' + e);
+  }
+}
+
+async function promptNewFolder() {
+  const name = prompt('Enter new folder name:');
+  if (!name) return;
+
+  try {
+    const res = await fetch('/api/files/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentPath, name, is_dir: true })
+    });
+    if (res.ok) {
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      alert('Error creating folder: ' + err);
+    }
+  } catch (e) {
+    alert('Network error: ' + e);
+  }
+}
+
+async function deleteItem(path, name) {
+  if (!confirm(`Are you sure you want to permanently delete '${name}'?`)) return;
+
+  try {
+    const res = await fetch('/api/files/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    if (res.ok) {
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      alert('Delete failed: ' + err);
+    }
+  } catch (e) {
+    alert('Network error: ' + e);
+  }
+}
+
+async function handleFileUpload(input) {
+  if (!input.files || input.files.length === 0) return;
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('path', currentPath);
+
+  try {
+    const res = await fetch('/api/files/upload', {
+      method: 'POST',
+      body: formData
+    });
+    if (res.ok) {
+      alert(`File '${file.name}' uploaded successfully!`);
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      alert('Upload failed: ' + err);
+    }
+  } catch (e) {
+    alert('Upload error: ' + e);
+  } finally {
+    input.value = '';
+  }
+}
+</script>
+{{end}}

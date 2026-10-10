@@ -55,6 +55,7 @@ func NewServer(
 		"databases.html",
 		"firewall.html",
 		"terminal.html",
+		"files.html",
 	}
 
 	for _, p := range pageFiles {
@@ -133,6 +134,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/databases", s.handleDatabasesPage)
 	mux.HandleFunc("/firewall", s.handleFirewallPage)
 	mux.HandleFunc("/terminal", s.handleTerminalPage)
+	mux.HandleFunc("/files", s.handleFilesPage)
 
 	// REST API Endpoints (Protected)
 	mux.HandleFunc("/api/stats", s.handleAPIStats)
@@ -144,6 +146,15 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/firewall", s.handleAPIFirewall)
 	mux.HandleFunc("/api/terminal/exec", s.handleAPITerminalExec)
 	mux.HandleFunc("/api/logs", s.handleAPILogs)
+
+	// File Manager APIs
+	mux.HandleFunc("/api/files/list", s.handleAPIFilesList)
+	mux.HandleFunc("/api/files/read", s.handleAPIFilesRead)
+	mux.HandleFunc("/api/files/save", s.handleAPIFilesSave)
+	mux.HandleFunc("/api/files/create", s.handleAPIFilesCreate)
+	mux.HandleFunc("/api/files/delete", s.handleAPIFilesDelete)
+	mux.HandleFunc("/api/files/upload", s.handleAPIFilesUpload)
+	mux.HandleFunc("/api/files/download", s.handleAPIFilesDownload)
 
 	// Wrap with security & authentication middleware
 	return s.securityMiddleware(s.authMiddleware(mux))

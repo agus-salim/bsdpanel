@@ -38,6 +38,11 @@
         <span>Websites & VHosts</span>
       </a>
 
+      <a href="/files" class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all {{if eq .ActiveNav "files"}}bg-sky-500/15 text-sky-400 font-semibold border-l-2 border-sky-400{{else}}text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-l-2 border-transparent font-medium{{end}}">
+        <i data-lucide="folder" class="w-4 h-4"></i>
+        <span>File Manager</span>
+      </a>
+
       <a href="/services" class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all {{if eq .ActiveNav "services"}}bg-sky-500/15 text-sky-400 font-semibold border-l-2 border-sky-400{{else}}text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-l-2 border-transparent font-medium{{end}}">
         <i data-lucide="layers" class="w-4 h-4"></i>
         <span>Services & Stack</span>

@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -517,4 +520,270 @@ func (s *Server) getFreeBSDStats(ctx context.Context) SystemStats {
 	}
 
 	return stats
+}
+
+// FileItem represents a directory entry in the File Manager.
+type FileItem struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	IsDir   bool   `json:"is_dir"`
+	Size    int64  `json:"size"`
+	SizeStr string `json:"size_str"`
+	Mode    string `json:"mode"`
+	ModTime string `json:"mod_time"`
+	Ext     string `json:"ext"`
+}
+
+func formatFileSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// handleFilesPage renders the Web File Manager interface.
+func (s *Server) handleFilesPage(w http.ResponseWriter, r *http.Request) {
+	sitesList, _ := s.siteMgr.ListSites()
+	currentPath := r.URL.Query().Get("path")
+	if currentPath == "" {
+		if len(sitesList) > 0 {
+			currentPath = sitesList[0].DocumentRoot
+		} else {
+			currentPath = "/usr/home"
+		}
+	}
+	currentPath = filepath.Clean(currentPath)
+
+	data := map[string]interface{}{
+		"Title":       "File Manager",
+		"ActiveNav":   "files",
+		"CurrentPath": currentPath,
+		"Sites":       sitesList,
+	}
+	s.render(w, "files.html", data)
+}
+
+// handleAPIFilesList returns directory items.
+func (s *Server) handleAPIFilesList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	targetPath := r.URL.Query().Get("path")
+	if targetPath == "" {
+		targetPath = "/usr/home"
+	}
+	targetPath = filepath.Clean(targetPath)
+
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var items []FileItem
+	for _, e := range entries {
+		info, err := e.Info()
+		var size int64 = 0
+		var mode string = "rw-r--r--"
+		var modTime string = ""
+		if err == nil {
+			size = info.Size()
+			mode = info.Mode().String()
+			modTime = info.ModTime().Format("02 Jan 2006 15:04")
+		}
+
+		itemPath := filepath.Join(targetPath, e.Name())
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		items = append(items, FileItem{
+			Name:    e.Name(),
+			Path:    itemPath,
+			IsDir:   e.IsDir(),
+			Size:    size,
+			SizeStr: formatFileSize(size),
+			Mode:    mode,
+			ModTime: modTime,
+			Ext:     ext,
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].IsDir != items[j].IsDir {
+			return items[i].IsDir
+		}
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
+	})
+
+	parentPath := filepath.Dir(targetPath)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"current_path": targetPath,
+		"parent_path":  parentPath,
+		"items":        items,
+	})
+}
+
+// handleAPIFilesRead reads text content of a file.
+func (s *Server) handleAPIFilesRead(w http.ResponseWriter, r *http.Request) {
+	targetPath := filepath.Clean(r.URL.Query().Get("path"))
+	if targetPath == "" {
+		http.Error(w, "path required", http.StatusBadRequest)
+		return
+	}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"path":    targetPath,
+		"content": string(data),
+		"size":    len(data),
+	})
+}
+
+// handleAPIFilesSave saves text content of a file.
+func (s *Server) handleAPIFilesSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	targetPath := filepath.Clean(req.Path)
+	if err := os.WriteFile(targetPath, []byte(req.Content), 0644); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIFilesCreate creates a new file or directory.
+func (s *Server) handleAPIFilesCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path  string `json:"path"`
+		Name  string `json:"name"`
+		IsDir bool   `json:"is_dir"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	newPath := filepath.Join(filepath.Clean(req.Path), req.Name)
+	var err error
+	if req.IsDir {
+		err = os.MkdirAll(newPath, 0755)
+	} else {
+		err = os.WriteFile(newPath, []byte(""), 0644)
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIFilesDelete deletes a file or directory.
+func (s *Server) handleAPIFilesDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	targetPath := filepath.Clean(req.Path)
+	if targetPath == "/" || targetPath == "/root" || targetPath == "/usr" || targetPath == "/etc" || targetPath == "/var" {
+		http.Error(w, "cannot delete core system directories", http.StatusBadRequest)
+		return
+	}
+
+	if err := os.RemoveAll(targetPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIFilesUpload uploads a file to the specified directory.
+func (s *Server) handleAPIFilesUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	_ = r.ParseMultipartForm(50 << 20) // 50MB
+	targetDir := filepath.Clean(r.FormValue("path"))
+	if targetDir == "" {
+		targetDir = "/usr/home"
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "failed to get uploaded file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	destPath := filepath.Join(targetDir, header.Filename)
+	out, err := os.Create(destPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIFilesDownload serves a file download.
+func (s *Server) handleAPIFilesDownload(w http.ResponseWriter, r *http.Request) {
+	targetPath := filepath.Clean(r.URL.Query().Get("path"))
+	if targetPath == "" {
+		http.Error(w, "path required", http.StatusBadRequest)
+		return
+	}
+
+	fileName := filepath.Base(targetPath)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+	http.ServeFile(w, r, targetPath)
 }
