@@ -652,14 +652,29 @@ func (s *Server) getFreeBSDStats(ctx context.Context) SystemStats {
 
 // FileItem represents a directory entry in the File Manager.
 type FileItem struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	IsDir   bool   `json:"is_dir"`
-	Size    int64  `json:"size"`
-	SizeStr string `json:"size_str"`
-	Mode    string `json:"mode"`
-	ModTime string `json:"mod_time"`
-	Ext     string `json:"ext"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	IsDir     bool   `json:"is_dir"`
+	Size      int64  `json:"size"`
+	SizeStr   string `json:"size_str"`
+	Mode      string `json:"mode"`
+	ModTime   string `json:"mod_time"`
+	Ext       string `json:"ext"`
+	IsArchive bool   `json:"is_archive"`
+}
+
+func isArchiveFilename(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasSuffix(lower, ".zip") ||
+		strings.HasSuffix(lower, ".tar.gz") ||
+		strings.HasSuffix(lower, ".tgz") ||
+		strings.HasSuffix(lower, ".tar.bz2") ||
+		strings.HasSuffix(lower, ".tbz2") ||
+		strings.HasSuffix(lower, ".tar.xz") ||
+		strings.HasSuffix(lower, ".txz") ||
+		strings.HasSuffix(lower, ".tar") ||
+		strings.HasSuffix(lower, ".rar") ||
+		strings.HasSuffix(lower, ".7z")
 }
 
 func formatFileSize(bytes int64) string {
@@ -727,14 +742,15 @@ func (s *Server) handleAPIFilesList(w http.ResponseWriter, r *http.Request) {
 		itemPath := filepath.Join(targetPath, e.Name())
 		ext := strings.ToLower(filepath.Ext(e.Name()))
 		items = append(items, FileItem{
-			Name:    e.Name(),
-			Path:    itemPath,
-			IsDir:   e.IsDir(),
-			Size:    size,
-			SizeStr: formatFileSize(size),
-			Mode:    mode,
-			ModTime: modTime,
-			Ext:     ext,
+			Name:      e.Name(),
+			Path:      itemPath,
+			IsDir:     e.IsDir(),
+			Size:      size,
+			SizeStr:   formatFileSize(size),
+			Mode:      mode,
+			ModTime:   modTime,
+			Ext:       ext,
+			IsArchive: isArchiveFilename(e.Name()),
 		})
 	}
 
@@ -835,7 +851,7 @@ func (s *Server) handleAPIFilesCreate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
-// handleAPIFilesDelete deletes a file or directory.
+// handleAPIFilesDelete deletes a file or directory (or multiple items).
 func (s *Server) handleAPIFilesDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -843,22 +859,34 @@ func (s *Server) handleAPIFilesDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Path string `json:"path"`
+		Path  string   `json:"path"`
+		Paths []string `json:"paths"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
-	targetPath := filepath.Clean(req.Path)
-	if targetPath == "/" || targetPath == "/root" || targetPath == "/usr" || targetPath == "/etc" || targetPath == "/var" {
-		http.Error(w, "cannot delete core system directories", http.StatusBadRequest)
+	targets := req.Paths
+	if len(targets) == 0 && req.Path != "" {
+		targets = []string{req.Path}
+	}
+
+	if len(targets) == 0 {
+		http.Error(w, "no target specified", http.StatusBadRequest)
 		return
 	}
 
-	if err := os.RemoveAll(targetPath); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	for _, p := range targets {
+		targetPath := filepath.Clean(p)
+		if targetPath == "/" || targetPath == "/root" || targetPath == "/usr" || targetPath == "/etc" || targetPath == "/var" {
+			http.Error(w, fmt.Sprintf("cannot delete core system directory '%s'", targetPath), http.StatusBadRequest)
+			return
+		}
+		if err := os.RemoveAll(targetPath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -914,4 +942,134 @@ func (s *Server) handleAPIFilesDownload(w http.ResponseWriter, r *http.Request) 
 	fileName := filepath.Base(targetPath)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
 	http.ServeFile(w, r, targetPath)
+}
+
+// handleAPIFilesRename renames a file or directory.
+func (s *Server) handleAPIFilesRename(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path    string `json:"path"`
+		NewName string `json:"new_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	oldPath := filepath.Clean(req.Path)
+	newName := strings.TrimSpace(req.NewName)
+	if newName == "" || strings.ContainsAny(newName, `/\`) {
+		http.Error(w, "invalid new name", http.StatusBadRequest)
+		return
+	}
+
+	if oldPath == "/" || oldPath == "/root" || oldPath == "/usr" || oldPath == "/etc" || oldPath == "/var" {
+		http.Error(w, "cannot rename core system directories", http.StatusBadRequest)
+		return
+	}
+
+	newPath := filepath.Join(filepath.Dir(oldPath), newName)
+	if err := os.Rename(oldPath, newPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIFilesArchive packages selected items into an archive.
+func (s *Server) handleAPIFilesArchive(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		BasePath    string   `json:"base_path"`
+		Items       []string `json:"items"`
+		ArchiveName string   `json:"archive_name"`
+		Format      string   `json:"format"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Items) == 0 {
+		http.Error(w, "no items selected for archiving", http.StatusBadRequest)
+		return
+	}
+
+	basePath := filepath.Clean(req.BasePath)
+	if basePath == "" {
+		http.Error(w, "base path required", http.StatusBadRequest)
+		return
+	}
+
+	if s.archiveMgr == nil {
+		http.Error(w, "archive manager not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	archivePath, err := s.archiveMgr.CreateArchive(r.Context(), basePath, req.Items, req.ArchiveName, req.Format)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"archive_path": archivePath,
+		"filename":     filepath.Base(archivePath),
+	})
+}
+
+// handleAPIFilesExtract extracts an archive file into a target directory.
+func (s *Server) handleAPIFilesExtract(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ArchivePath string `json:"archive_path"`
+		DestPath    string `json:"dest_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	archivePath := filepath.Clean(req.ArchivePath)
+	if archivePath == "" {
+		http.Error(w, "archive path required", http.StatusBadRequest)
+		return
+	}
+
+	destPath := filepath.Clean(req.DestPath)
+	if destPath == "" || destPath == "." {
+		destPath = filepath.Dir(archivePath)
+	}
+
+	if s.archiveMgr == nil {
+		http.Error(w, "archive manager not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	if err := s.archiveMgr.ExtractArchive(r.Context(), archivePath, destPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"dest_path": destPath,
+	})
 }

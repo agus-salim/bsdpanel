@@ -28,6 +28,7 @@ type Server struct {
 	firewallMgr *system.FirewallManager
 	siteMgr     *sites.SiteManager
 	dbMgr       *database.DatabaseManager
+	archiveMgr  *system.ArchiveManager
 	pages       map[string]*template.Template
 	staticFS    http.FileSystem
 	sessions    map[string]time.Time
@@ -44,6 +45,7 @@ func NewServer(
 	firewallMgr *system.FirewallManager,
 	siteMgr *sites.SiteManager,
 	dbMgr *database.DatabaseManager,
+	archiveMgr *system.ArchiveManager,
 	embeddedAssets embed.FS,
 ) (*Server, error) {
 	// Build isolated template sets per page to avoid Go template namespace collisions
@@ -87,6 +89,7 @@ func NewServer(
 		firewallMgr: firewallMgr,
 		siteMgr:     siteMgr,
 		dbMgr:       dbMgr,
+		archiveMgr:  archiveMgr,
 		pages:       pages,
 		staticFS:    http.FS(staticSub),
 		sessions:    make(map[string]time.Time),
@@ -158,6 +161,9 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/files/delete", s.handleAPIFilesDelete)
 	mux.HandleFunc("/api/files/upload", s.handleAPIFilesUpload)
 	mux.HandleFunc("/api/files/download", s.handleAPIFilesDownload)
+	mux.HandleFunc("/api/files/rename", s.handleAPIFilesRename)
+	mux.HandleFunc("/api/files/archive", s.handleAPIFilesArchive)
+	mux.HandleFunc("/api/files/extract", s.handleAPIFilesExtract)
 
 	// Wrap with security & authentication middleware
 	return s.securityMiddleware(s.authMiddleware(mux))

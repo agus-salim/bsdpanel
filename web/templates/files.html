@@ -9,7 +9,7 @@
         <i data-lucide="folder" class="w-5 h-5 text-amber-400"></i>
         <span>File Manager</span>
       </h2>
-      <p class="text-xs text-slate-400 mt-0.5">Browse, edit, upload, and manage website files</p>
+      <p class="text-xs text-slate-400 mt-0.5">Browse, edit, compress, extract, upload, and manage website files</p>
     </div>
 
     <!-- Quick Site Selector -->
@@ -29,26 +29,29 @@
   <!-- Navigation & Toolbar Card -->
   <div class="bg-dark-800 border border-slate-700/60 rounded-xl p-3.5 shadow-sm space-y-3">
     <!-- Path Bar & Action Buttons -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
       <!-- Breadcrumb Bar -->
-      <div class="flex-1 flex items-center gap-2 bg-dark-950 border border-slate-700/80 rounded-lg px-3 py-1.5 overflow-x-auto text-xs font-mono">
-        <button onclick="goToParent()" title="Go up to parent directory" class="text-slate-400 hover:text-slate-100 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer">
+      <div class="flex-1 flex items-center gap-2 bg-dark-950 border border-slate-700/80 rounded-lg px-3 py-1.5 overflow-x-auto text-xs font-mono shadow-inner">
+        <button onclick="goToParent()" title="Go up to parent directory" class="text-slate-400 hover:text-slate-100 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer flex-shrink-0">
           <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
         </button>
-        <span class="text-slate-500">Path:</span>
-        <div id="breadcrumbTrail" class="flex items-center gap-1 text-slate-300">
+        <span class="text-slate-500 font-medium select-none flex-shrink-0">Path:</span>
+        <div id="breadcrumbTrail" class="flex items-center gap-1.5 text-slate-300 flex-1 overflow-x-auto py-0.5">
           <!-- Populated by JS -->
         </div>
+        <button onclick="copyCurrentPath()" title="Copy current path" class="text-slate-400 hover:text-sky-400 p-1 rounded hover:bg-slate-800 transition-all cursor-pointer flex-shrink-0" id="copyPathBtn">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+        </button>
       </div>
 
       <!-- Action Buttons -->
       <div class="flex items-center gap-2 flex-wrap">
-        <button onclick="promptNewFile()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer">
+        <button onclick="openNewFileModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm">
           <i data-lucide="file-plus" class="w-3.5 h-3.5 text-sky-400"></i>
           <span>New File</span>
         </button>
 
-        <button onclick="promptNewFolder()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer">
+        <button onclick="openNewFolderModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-900 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm">
           <i data-lucide="folder-plus" class="w-3.5 h-3.5 text-amber-400"></i>
           <span>New Folder</span>
         </button>
@@ -57,12 +60,56 @@
           <i data-lucide="upload" class="w-3.5 h-3.5"></i>
           <span>Upload</span>
         </button>
-        <input type="file" id="fileUploadInput" onchange="handleFileUpload(this)" class="hidden">
+        <input type="file" id="fileUploadInput" onchange="handleFileUpload(this)" class="hidden" multiple>
 
-        <button onclick="loadDirectory(currentPath)" title="Refresh" class="p-2 rounded-lg bg-dark-900 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition-all cursor-pointer">
+        <button onclick="openArchiveModalForSelection()" id="archiveSelectedBtn" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 transition-all cursor-pointer shadow-sm">
+          <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+          <span>Archive</span>
+        </button>
+
+        <button onclick="loadDirectory(currentPath)" title="Refresh" class="p-2 rounded-lg bg-dark-900 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
         </button>
       </div>
+    </div>
+
+    <!-- Filter & Live Search Toolbar -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-slate-700/40">
+      <div class="relative flex-1 max-w-sm">
+        <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-500">
+          <i data-lucide="search" class="w-3.5 h-3.5"></i>
+        </div>
+        <input type="text" id="fileSearchInput" oninput="filterFiles(this.value)" placeholder="Filter items in current folder..." class="w-full pl-8 pr-7 py-1.5 bg-dark-950 border border-slate-700/80 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500">
+        <button id="clearSearchBtn" onclick="clearFileFilter()" class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-500 hover:text-slate-300 cursor-pointer">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+      <!-- Quick summary badge -->
+      <div id="dirStatsText" class="text-[11px] font-mono text-slate-400 self-center">
+        Loading items...
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Select Floating Action Banner -->
+  <div id="selectionBanner" class="hidden bg-sky-950/40 border border-sky-600/40 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-sky-200 animate-fadeIn">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+      <span id="selectionCountText" class="font-medium font-mono">0 items selected</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="openArchiveModalForSelection()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium transition-all cursor-pointer shadow-sm">
+        <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+        <span>Compress to Archive</span>
+      </button>
+      <button onclick="confirmBatchDelete()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 font-medium transition-all cursor-pointer">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        <span>Delete Selected</span>
+      </button>
+      <button onclick="clearSelection()" class="px-2.5 py-1 rounded-lg bg-dark-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 transition-all cursor-pointer">
+        Deselect
+      </button>
     </div>
   </div>
 
@@ -70,18 +117,36 @@
   <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs">
-        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-400 font-semibold uppercase tracking-wider">
+        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
           <tr>
-            <th class="px-4 py-3">Name</th>
-            <th class="px-4 py-3">Size</th>
+            <th class="w-10 px-4 py-3 text-center">
+              <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" class="w-3.5 h-3.5 rounded border-slate-700 bg-dark-950 text-sky-500 focus:ring-0 cursor-pointer">
+            </th>
+            <th class="px-4 py-3 cursor-pointer select-none hover:text-slate-200" onclick="sortFiles('name')">
+              <div class="flex items-center gap-1">
+                <span>Name</span>
+                <span id="sortNameIndicator" class="text-[10px] text-slate-500"></span>
+              </div>
+            </th>
+            <th class="px-4 py-3 cursor-pointer select-none hover:text-slate-200" onclick="sortFiles('size')">
+              <div class="flex items-center gap-1">
+                <span>Size</span>
+                <span id="sortSizeIndicator" class="text-[10px] text-slate-500"></span>
+              </div>
+            </th>
             <th class="px-4 py-3">Permissions</th>
-            <th class="px-4 py-3">Modified</th>
+            <th class="px-4 py-3 cursor-pointer select-none hover:text-slate-200" onclick="sortFiles('modified')">
+              <div class="flex items-center gap-1">
+                <span>Modified</span>
+                <span id="sortModifiedIndicator" class="text-[10px] text-slate-500"></span>
+              </div>
+            </th>
             <th class="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody id="filesTableBody" class="divide-y divide-slate-700/40 text-slate-300">
           <tr>
-            <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+            <td colspan="6" class="px-4 py-8 text-center text-slate-400">
               <div class="flex items-center justify-center gap-2">
                 <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin text-sky-400"></i>
                 <span>Loading directory contents...</span>
@@ -94,9 +159,185 @@
   </div>
 </div>
 
+<!-- ========================================== -->
+<!-- MODALS -->
+<!-- ========================================== -->
+
+<!-- New File Modal -->
+<div id="newFileModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+    <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+        <i data-lucide="file-plus" class="w-4 h-4 text-sky-400"></i>
+        <span>Create New File</span>
+      </div>
+      <button onclick="closeModal('newFileModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <form onsubmit="submitNewFile(event)" class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">File Name:</label>
+        <input type="text" id="newFileNameInput" required placeholder="e.g. index.php, config.json, style.css" class="w-full px-3 py-2 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500">
+        <p class="text-[11px] text-slate-500 mt-1">Will be created in current directory</p>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal('newFileModal')" class="px-3.5 py-1.5 rounded-lg text-xs bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">Cancel</button>
+        <button type="submit" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shadow-sm">Create File</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- New Folder Modal -->
+<div id="newFolderModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+    <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+        <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i>
+        <span>Create New Folder</span>
+      </div>
+      <button onclick="closeModal('newFolderModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <form onsubmit="submitNewFolder(event)" class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Folder Name:</label>
+        <input type="text" id="newFolderNameInput" required placeholder="e.g. assets, uploads, backup" class="w-full px-3 py-2 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500">
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal('newFolderModal')" class="px-3.5 py-1.5 rounded-lg text-xs bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">Cancel</button>
+        <button type="submit" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shadow-sm">Create Folder</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Rename Modal -->
+<div id="renameModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+    <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+        <i data-lucide="edit" class="w-4 h-4 text-sky-400"></i>
+        <span>Rename Item</span>
+      </div>
+      <button onclick="closeModal('renameModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <form onsubmit="submitRename(event)" class="p-5 space-y-4">
+      <input type="hidden" id="renameOldPath">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">New Name:</label>
+        <input type="text" id="renameNewNameInput" required class="w-full px-3 py-2 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500">
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal('renameModal')" class="px-3.5 py-1.5 rounded-lg text-xs bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">Cancel</button>
+        <button type="submit" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shadow-sm">Rename</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Archive / Compress Modal -->
+<div id="archiveModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="w-full max-w-lg bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+    <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+        <i data-lucide="archive" class="w-4 h-4 text-purple-400"></i>
+        <span>Create Archive (Compress)</span>
+      </div>
+      <button onclick="closeModal('archiveModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <form onsubmit="submitArchive(event)" class="p-5 space-y-4">
+      <!-- Items to compress list -->
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Items to Compress:</label>
+        <div id="archiveItemsList" class="max-h-28 overflow-y-auto bg-dark-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 space-y-1 font-mono">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Archive file name -->
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Archive File Name:</label>
+        <input type="text" id="archiveFileNameInput" required placeholder="archive.zip" class="w-full px-3 py-2 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-purple-500">
+      </div>
+
+      <!-- Format selector -->
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Archive Format:</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="flex items-center gap-2 p-2 bg-dark-950 border border-slate-700 rounded-lg cursor-pointer hover:border-purple-500 transition-all">
+            <input type="radio" name="archiveFormat" value="zip" checked onchange="updateArchiveExtension('zip')" class="text-purple-600 focus:ring-0">
+            <span class="text-xs text-slate-200 font-mono">.zip</span>
+          </label>
+          <label class="flex items-center gap-2 p-2 bg-dark-950 border border-slate-700 rounded-lg cursor-pointer hover:border-purple-500 transition-all">
+            <input type="radio" name="archiveFormat" value="tar.gz" onchange="updateArchiveExtension('tar.gz')" class="text-purple-600 focus:ring-0">
+            <span class="text-xs text-slate-200 font-mono">.tar.gz</span>
+          </label>
+          <label class="flex items-center gap-2 p-2 bg-dark-950 border border-slate-700 rounded-lg cursor-pointer hover:border-purple-500 transition-all">
+            <input type="radio" name="archiveFormat" value="tar.bz2" onchange="updateArchiveExtension('tar.bz2')" class="text-purple-600 focus:ring-0">
+            <span class="text-xs text-slate-200 font-mono">.tar.bz2</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal('archiveModal')" class="px-3.5 py-1.5 rounded-lg text-xs bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">Cancel</button>
+        <button type="submit" id="archiveSubmitBtn" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-sm">
+          <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+          <span>Compress Now</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Extract Archive Modal -->
+<div id="extractModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+  <div class="w-full max-w-lg bg-dark-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+    <div class="px-5 py-4 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+        <i data-lucide="package" class="w-4 h-4 text-purple-400"></i>
+        <span>Extract Archive</span>
+      </div>
+      <button onclick="closeModal('extractModal')" class="text-slate-400 hover:text-slate-200 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <form onsubmit="submitExtract(event)" class="p-5 space-y-4">
+      <input type="hidden" id="extractSourcePath">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Archive File:</label>
+        <div id="extractFileNameDisplay" class="px-3 py-2 bg-dark-950 border border-slate-800 rounded-lg text-xs text-slate-200 font-mono truncate">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">Extract Destination Path:</label>
+        <input type="text" id="extractDestPathInput" required class="w-full px-3 py-2 bg-dark-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-purple-500">
+        <p class="text-[11px] text-slate-500 mt-1">Files will be extracted directly into this directory</p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal('extractModal')" class="px-3.5 py-1.5 rounded-lg text-xs bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">Cancel</button>
+        <button type="submit" id="extractSubmitBtn" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-sm">
+          <i data-lucide="package" class="w-3.5 h-3.5"></i>
+          <span>Extract Files</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Built-in Code Editor Modal -->
-<div id="editorModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-  <div class="w-full max-w-5xl bg-dark-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden">
+<div id="editorModal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+  <div class="w-full max-w-5xl bg-dark-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden animate-fadeIn">
     <!-- Editor Header -->
     <div class="p-3.5 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-2">
@@ -122,18 +363,67 @@
   </div>
 </div>
 
+<!-- Floating Toast Container -->
+<div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
 <script>
 let currentPath = "{{.CurrentPath}}";
 let parentPath = "/usr/home";
+let loadedItems = [];
+let selectedPaths = new Set();
+let currentSort = { field: 'name', asc: true };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadDirectory(currentPath);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAllModals();
+    }
+    // Ctrl+S / Cmd+S in editor
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if (!document.getElementById('editorModal').classList.contains('hidden')) {
+        e.preventDefault();
+        saveCurrentFile();
+      }
+    }
+  });
 });
 
 function jumpToSite(path) {
   if (path) {
     loadDirectory(path);
   }
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl border text-xs font-medium shadow-xl flex items-center gap-2.5 transition-all transform duration-200 translate-y-2 opacity-0 ${
+    type === 'success' ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200' :
+    type === 'error' ? 'bg-rose-950/90 border-rose-500/50 text-rose-200' :
+    'bg-dark-800/95 border-slate-700 text-slate-200'
+  }`;
+
+  const iconName = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-triangle' : 'check');
+  toast.innerHTML = `
+    <i data-lucide="${iconName}" class="w-4 h-4 flex-shrink-0"></i>
+    <span>${message}</span>
+  `;
+  container.appendChild(toast);
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  // Animate in
+  setTimeout(() => {
+    toast.classList.remove('translate-y-2', 'opacity-0');
+  }, 10);
+
+  // Auto dismiss
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'translate-y-2');
+    setTimeout(() => toast.remove(), 250);
+  }, 3500);
 }
 
 function updateBreadcrumbs(path) {
@@ -145,8 +435,9 @@ function updateBreadcrumbs(path) {
 
   // Root button
   const rootBtn = document.createElement('button');
-  rootBtn.className = 'text-sky-400 hover:underline cursor-pointer font-bold';
-  rootBtn.textContent = '/';
+  rootBtn.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 text-sky-400 hover:text-sky-300 font-bold transition-all cursor-pointer';
+  rootBtn.innerHTML = '<i data-lucide="home" class="w-3.5 h-3.5"></i>';
+  rootBtn.title = 'Root (/)';
   rootBtn.onclick = () => loadDirectory('/');
   container.appendChild(rootBtn);
 
@@ -155,15 +446,30 @@ function updateBreadcrumbs(path) {
     const thisPath = accum;
 
     const sep = document.createElement('span');
-    sep.className = 'text-slate-600';
-    sep.textContent = '/';
+    sep.className = 'text-slate-600 select-none';
+    sep.innerHTML = '<i data-lucide="chevron-right" class="w-3 h-3"></i>';
     container.appendChild(sep);
 
     const btn = document.createElement('button');
-    btn.className = (idx === parts.length - 1) ? 'text-slate-100 font-bold' : 'text-sky-400 hover:underline cursor-pointer';
+    const isLast = (idx === parts.length - 1);
+    btn.className = isLast
+      ? 'px-2 py-0.5 rounded bg-sky-950/60 border border-sky-600/40 text-sky-300 font-bold select-none cursor-default'
+      : 'px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-sky-400 transition-all cursor-pointer';
     btn.textContent = p;
-    btn.onclick = () => loadDirectory(thisPath);
+    if (!isLast) {
+      btn.onclick = () => loadDirectory(thisPath);
+    }
     container.appendChild(btn);
+  });
+
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function copyCurrentPath() {
+  navigator.clipboard.writeText(currentPath).then(() => {
+    showToast('Path copied to clipboard!', 'success');
+  }).catch(() => {
+    showToast('Failed to copy path', 'error');
   });
 }
 
@@ -175,65 +481,215 @@ function goToParent() {
 
 async function loadDirectory(path) {
   currentPath = path;
+  selectedPaths.clear();
+  updateSelectionUI();
   updateBreadcrumbs(path);
+
   const tbody = document.getElementById('filesTableBody');
-  tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Loading directory...</td></tr>';
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="6" class="px-4 py-8 text-center text-slate-400">
+        <div class="flex items-center justify-center gap-2">
+          <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin text-sky-400"></i>
+          <span>Loading directory contents...</span>
+        </div>
+      </td>
+    </tr>
+  `;
+  if (window.renderLucideIcons) window.renderLucideIcons();
 
   try {
     const res = await fetch(`/api/files/list?path=${encodeURIComponent(path)}`);
     if (!res.ok) {
       const err = await res.text();
-      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-rose-400 font-mono">Error: ${err}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-rose-400 font-mono">Error: ${err}</td></tr>`;
       return;
     }
     const data = await res.json();
     parentPath = data.parent_path || '/';
-    renderItems(data.items || []);
+    loadedItems = data.items || [];
+    applySortAndRender();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-rose-400 font-mono">Network error: ${err}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-rose-400 font-mono">Network error: ${err}</td></tr>`;
   }
+}
+
+function filterFiles(keyword) {
+  const clearBtn = document.getElementById('clearSearchBtn');
+  if (keyword.trim()) {
+    clearBtn.classList.remove('hidden');
+  } else {
+    clearBtn.classList.add('hidden');
+  }
+  applySortAndRender();
+}
+
+function clearFileFilter() {
+  const input = document.getElementById('fileSearchInput');
+  input.value = '';
+  document.getElementById('clearSearchBtn').classList.add('hidden');
+  applySortAndRender();
+}
+
+function sortFiles(field) {
+  if (currentSort.field === field) {
+    currentSort.asc = !currentSort.asc;
+  } else {
+    currentSort.field = field;
+    currentSort.asc = true;
+  }
+  applySortAndRender();
+}
+
+function applySortAndRender() {
+  const filterVal = (document.getElementById('fileSearchInput').value || '').toLowerCase().trim();
+  let items = loadedItems.filter(item => item.name.toLowerCase().includes(filterVal));
+
+  items.sort((a, b) => {
+    // Directories always first
+    if (a.is_dir !== b.is_dir) {
+      return a.is_dir ? -1 : 1;
+    }
+    let res = 0;
+    if (currentSort.field === 'name') {
+      res = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    } else if (currentSort.field === 'size') {
+      res = a.size - b.size;
+    } else if (currentSort.field === 'modified') {
+      res = a.mod_time.localeCompare(b.mod_time);
+    }
+    return currentSort.asc ? res : -res;
+  });
+
+  // Update sort indicators
+  ['Name', 'Size', 'Modified'].forEach(f => {
+    const el = document.getElementById(`sort${f}Indicator`);
+    if (el) {
+      if (currentSort.field === f.toLowerCase()) {
+        el.textContent = currentSort.asc ? '▲' : '▼';
+      } else {
+        el.textContent = '';
+      }
+    }
+  });
+
+  renderItems(items);
+  updateDirStats(items, loadedItems.length);
+}
+
+function updateDirStats(displayItems, totalCount) {
+  const dirs = loadedItems.filter(i => i.is_dir).length;
+  const files = loadedItems.filter(i => !i.is_dir).length;
+  let totalBytes = 0;
+  loadedItems.forEach(i => { if (!i.is_dir) totalBytes += i.size; });
+
+  const statsEl = document.getElementById('dirStatsText');
+  if (displayItems.length !== totalCount) {
+    statsEl.textContent = `Showing ${displayItems.length} of ${totalCount} items (${dirs} folders, ${files} files)`;
+  } else {
+    statsEl.textContent = `${totalCount} items (${dirs} folders, ${files} files) • Total: ${formatSize(totalBytes)}`;
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let u = -1;
+  do {
+    bytes /= 1024;
+    ++u;
+  } while (bytes >= 1024 && u < units.length - 1);
+  return bytes.toFixed(1) + ' ' + units[u];
 }
 
 function renderItems(items) {
   const tbody = document.getElementById('filesTableBody');
   tbody.innerHTML = '';
 
+  const selectAll = document.getElementById('selectAllCheckbox');
+  if (selectAll) {
+    selectAll.checked = (items.length > 0 && items.every(i => selectedPaths.has(i.path)));
+  }
+
   if (items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Directory is empty.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 font-mono">No files or folders found.</td></tr>';
     return;
   }
 
   items.forEach(item => {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-dark-750 transition-all';
+    const isSelected = selectedPaths.has(item.path);
+    tr.className = `group transition-all ${isSelected ? 'bg-sky-950/30' : 'hover:bg-dark-750'}`;
 
-    const iconType = item.is_dir ? 'folder' : (isCodeExt(item.ext) ? 'file-text' : 'file');
-    const iconColor = item.is_dir ? 'text-amber-400' : 'text-sky-400';
+    // Determine icon and color
+    let iconName = 'file';
+    let iconColor = 'text-slate-400';
+    if (item.is_dir) {
+      iconName = 'folder';
+      iconColor = 'text-amber-400';
+    } else if (item.is_archive) {
+      iconName = 'archive';
+      iconColor = 'text-purple-400';
+    } else if (isCodeExt(item.ext)) {
+      iconName = 'file-code';
+      iconColor = 'text-sky-400';
+    } else if (isImageExt(item.ext)) {
+      iconName = 'image';
+      iconColor = 'text-rose-400';
+    }
 
     tr.innerHTML = `
+      <td class="w-10 px-4 py-2.5 text-center">
+        <input type="checkbox" onchange="toggleItemSelect('${escapePath(item.path)}', this.checked)" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-slate-700 bg-dark-950 text-sky-500 focus:ring-0 cursor-pointer">
+      </td>
       <td class="px-4 py-2.5 font-medium text-slate-200">
-        <div class="flex items-center gap-2 cursor-pointer" onclick="${item.is_dir ? `loadDirectory('${escapePath(item.path)}')` : `openEditor('${escapePath(item.path)}')`}">
-          <i data-lucide="${iconType}" class="w-4 h-4 ${iconColor}"></i>
-          <span class="hover:text-sky-400 transition-all">${item.name}</span>
+        <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="${item.is_dir ? `loadDirectory('${escapePath(item.path)}')` : (item.is_archive ? `openExtractModal('${escapePath(item.path)}')` : `openEditor('${escapePath(item.path)}')`)}">
+          <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor} flex-shrink-0"></i>
+          <span class="hover:text-sky-400 transition-all font-mono text-[12px] truncate max-w-md">${item.name}</span>
+          ${item.is_archive ? `<span class="px-1.5 py-0.2 rounded bg-purple-950/80 border border-purple-500/40 text-[9px] text-purple-300 font-mono">ARCHIVE</span>` : ''}
         </div>
       </td>
-      <td class="px-4 py-2.5 text-slate-400 font-mono text-[11px]">${item.is_dir ? '-' : item.size_str}</td>
-      <td class="px-4 py-2.5 text-slate-500 font-mono text-[10px]">${item.mode}</td>
-      <td class="px-4 py-2.5 text-slate-400 text-[11px]">${item.mod_time}</td>
+      <td class="px-4 py-2.5 text-slate-400 font-mono text-[11px] whitespace-nowrap">${item.is_dir ? '-' : item.size_str}</td>
+      <td class="px-4 py-2.5 whitespace-nowrap">
+        <span class="px-2 py-0.5 rounded bg-dark-900 border border-slate-700/60 font-mono text-[10px] text-slate-400 select-all">${item.mode}</span>
+      </td>
+      <td class="px-4 py-2.5 text-slate-400 text-[11px] whitespace-nowrap">${item.mod_time}</td>
       <td class="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-        ${!item.is_dir ? `
-          <button onclick="openEditor('${escapePath(item.path)}')" class="px-2 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
-            Edit
+        ${item.is_archive ? `
+          <button onclick="openExtractModal('${escapePath(item.path)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/50 text-[11px] font-medium transition-all cursor-pointer shadow-sm">
+            <i data-lucide="package" class="w-3 h-3"></i>
+            <span>Extract</span>
           </button>
-          <a href="/api/files/download?path=${encodeURIComponent(item.path)}" class="px-2 py-1 rounded bg-dark-900 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700 transition-all">
-            Download
-          </a>
-        ` : `
-          <button onclick="loadDirectory('${escapePath(item.path)}')" class="px-2 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+        ` : ''}
+
+        ${item.is_dir ? `
+          <button onclick="loadDirectory('${escapePath(item.path)}')" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
             Open
           </button>
+          <button onclick="openArchiveModalSingle('${escapePath(item.name)}')" title="Compress folder" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-purple-900/40 text-purple-300 text-[11px] border border-slate-700 transition-all cursor-pointer">
+            Archive
+          </button>
+        ` : `
+          ${isCodeExt(item.ext) ? `
+            <button onclick="openEditor('${escapePath(item.path)}')" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-sky-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+              Edit
+            </button>
+          ` : ''}
+          ${!item.is_archive ? `
+            <button onclick="openArchiveModalSingle('${escapePath(item.name)}')" title="Compress file" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-purple-900/40 text-purple-300 text-[11px] border border-slate-700 transition-all cursor-pointer">
+              Archive
+            </button>
+          ` : ''}
+          <a href="/api/files/download?path=${encodeURIComponent(item.path)}" title="Download" class="inline-block px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700 transition-all">
+            Download
+          </a>
         `}
-        <button onclick="deleteItem('${escapePath(item.path)}', '${item.name}')" class="px-2 py-1 rounded bg-dark-900 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
+
+        <button onclick="openRenameModal('${escapePath(item.path)}', '${escapePath(item.name)}')" title="Rename" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700 transition-all cursor-pointer">
+          Rename
+        </button>
+
+        <button onclick="deleteSingleItem('${escapePath(item.path)}', '${escapePath(item.name)}')" title="Delete" class="px-2 py-1 rounded-md bg-dark-900 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 text-[11px] border border-slate-700 transition-all cursor-pointer">
           Delete
         </button>
       </td>
@@ -249,11 +705,413 @@ function escapePath(str) {
 }
 
 function isCodeExt(ext) {
-  const codeExts = ['.php', '.html', '.htm', '.css', '.js', '.json', '.txt', '.conf', '.env', '.sh', '.xml', '.yml', '.yaml', '.sql', '.htaccess'];
+  const codeExts = ['.php', '.html', '.htm', '.css', '.js', '.ts', '.json', '.txt', '.conf', '.env', '.sh', '.xml', '.yml', '.yaml', '.sql', '.htaccess', '.py', '.md'];
   return codeExts.includes(ext);
 }
 
-// Built-in Editor functions
+function isImageExt(ext) {
+  const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp'];
+  return imgExts.includes(ext);
+}
+
+// ==========================================
+// SELECTION MANAGEMENT
+// ==========================================
+
+function toggleItemSelect(path, checked) {
+  if (checked) {
+    selectedPaths.add(path);
+  } else {
+    selectedPaths.delete(path);
+  }
+  updateSelectionUI();
+}
+
+function toggleSelectAll(checked) {
+  const filterVal = (document.getElementById('fileSearchInput').value || '').toLowerCase().trim();
+  const visibleItems = loadedItems.filter(item => item.name.toLowerCase().includes(filterVal));
+
+  if (checked) {
+    visibleItems.forEach(i => selectedPaths.add(i.path));
+  } else {
+    visibleItems.forEach(i => selectedPaths.delete(i.path));
+  }
+  applySortAndRender();
+  updateSelectionUI();
+}
+
+function clearSelection() {
+  selectedPaths.clear();
+  applySortAndRender();
+  updateSelectionUI();
+}
+
+function updateSelectionUI() {
+  const count = selectedPaths.size;
+  const banner = document.getElementById('selectionBanner');
+  const countText = document.getElementById('selectionCountText');
+  const archiveBtn = document.getElementById('archiveSelectedBtn');
+
+  if (count > 0) {
+    banner.classList.remove('hidden');
+    countText.textContent = `${count} item${count > 1 ? 's' : ''} selected`;
+    if (archiveBtn) archiveBtn.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+    if (archiveBtn) archiveBtn.classList.add('hidden');
+  }
+}
+
+// ==========================================
+// MODAL CONTROLLERS
+// ==========================================
+
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function closeAllModals() {
+  ['newFileModal', 'newFolderModal', 'renameModal', 'archiveModal', 'extractModal', 'editorModal'].forEach(id => {
+    closeModal(id);
+  });
+}
+
+function openNewFileModal() {
+  document.getElementById('newFileNameInput').value = '';
+  openModal('newFileModal');
+  setTimeout(() => document.getElementById('newFileNameInput').focus(), 50);
+}
+
+function openNewFolderModal() {
+  document.getElementById('newFolderNameInput').value = '';
+  openModal('newFolderModal');
+  setTimeout(() => document.getElementById('newFolderNameInput').focus(), 50);
+}
+
+function openRenameModal(path, currentName) {
+  document.getElementById('renameOldPath').value = path;
+  const input = document.getElementById('renameNewNameInput');
+  input.value = currentName;
+  openModal('renameModal');
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
+}
+
+function openArchiveModalSingle(itemName) {
+  selectedPaths.clear();
+  const fullPath = (currentPath === '/' ? '/' : currentPath + '/') + itemName;
+  selectedPaths.add(fullPath);
+  updateSelectionUI();
+  openArchiveModalForSelection();
+}
+
+function openArchiveModalForSelection() {
+  if (selectedPaths.size === 0) {
+    showToast('Please select at least one item to archive', 'error');
+    return;
+  }
+
+  const listContainer = document.getElementById('archiveItemsList');
+  listContainer.innerHTML = '';
+
+  const items = Array.from(selectedPaths).map(p => p.split('/').filter(Boolean).pop());
+  items.forEach(name => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'flex items-center gap-1.5 text-slate-300';
+    itemEl.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-purple-400"></i><span>${name}</span>`;
+    listContainer.appendChild(itemEl);
+  });
+
+  // Suggest default archive name
+  let defaultName = 'archive.zip';
+  if (items.length === 1) {
+    defaultName = items[0] + '.zip';
+  } else {
+    const dirBase = currentPath.split('/').filter(Boolean).pop() || 'backup';
+    defaultName = dirBase + '-files.zip';
+  }
+  document.getElementById('archiveFileNameInput').value = defaultName;
+
+  // Reset format to zip
+  const zipRadio = document.querySelector('input[name="archiveFormat"][value="zip"]');
+  if (zipRadio) zipRadio.checked = true;
+
+  openModal('archiveModal');
+}
+
+function updateArchiveExtension(format) {
+  const input = document.getElementById('archiveFileNameInput');
+  let val = input.value;
+  // strip existing archive extension
+  val = val.replace(/\.(zip|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar)$/i, '');
+  if (!val) val = 'archive';
+  input.value = val + '.' + format;
+}
+
+function openExtractModal(archivePath) {
+  document.getElementById('extractSourcePath').value = archivePath;
+  const fileName = archivePath.split('/').filter(Boolean).pop();
+  document.getElementById('extractFileNameDisplay').textContent = fileName;
+  document.getElementById('extractDestPathInput').value = currentPath;
+  openModal('extractModal');
+}
+
+// ==========================================
+// API SUBMISSION HANDLERS
+// ==========================================
+
+async function submitNewFile(e) {
+  e.preventDefault();
+  const name = document.getElementById('newFileNameInput').value.trim();
+  if (!name) return;
+
+  try {
+    const res = await fetch('/api/files/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentPath, name, is_dir: false })
+    });
+    if (res.ok) {
+      closeModal('newFileModal');
+      showToast(`File '${name}' created!`, 'success');
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Error creating file: ' + err, 'error');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err, 'error');
+  }
+}
+
+async function submitNewFolder(e) {
+  e.preventDefault();
+  const name = document.getElementById('newFolderNameInput').value.trim();
+  if (!name) return;
+
+  try {
+    const res = await fetch('/api/files/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentPath, name, is_dir: true })
+    });
+    if (res.ok) {
+      closeModal('newFolderModal');
+      showToast(`Folder '${name}' created!`, 'success');
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Error creating folder: ' + err, 'error');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err, 'error');
+  }
+}
+
+async function submitRename(e) {
+  e.preventDefault();
+  const oldPath = document.getElementById('renameOldPath').value;
+  const newName = document.getElementById('renameNewNameInput').value.trim();
+  if (!newName) return;
+
+  try {
+    const res = await fetch('/api/files/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: oldPath, new_name: newName })
+    });
+    if (res.ok) {
+      closeModal('renameModal');
+      showToast('Renamed successfully!', 'success');
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Rename failed: ' + err, 'error');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err, 'error');
+  }
+}
+
+async function submitArchive(e) {
+  e.preventDefault();
+  const archiveName = document.getElementById('archiveFileNameInput').value.trim();
+  const formatEl = document.querySelector('input[name="archiveFormat"]:checked');
+  const format = formatEl ? formatEl.value : 'zip';
+
+  const items = Array.from(selectedPaths).map(p => p.split('/').filter(Boolean).pop());
+  if (items.length === 0) {
+    showToast('No items selected', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('archiveSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Compressing...</span>`;
+
+  try {
+    const res = await fetch('/api/files/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_path: currentPath,
+        items: items,
+        archive_name: archiveName,
+        format: format
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      closeModal('archiveModal');
+      selectedPaths.clear();
+      updateSelectionUI();
+      showToast(`Archive '${data.filename}' created successfully!`, 'success');
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Archive failed: ' + err, 'error');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="archive" class="w-3.5 h-3.5"></i><span>Compress Now</span>`;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+async function submitExtract(e) {
+  e.preventDefault();
+  const archivePath = document.getElementById('extractSourcePath').value;
+  const destPath = document.getElementById('extractDestPathInput').value.trim();
+
+  const btn = document.getElementById('extractSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Extracting...</span>`;
+
+  try {
+    const res = await fetch('/api/files/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        archive_path: archivePath,
+        dest_path: destPath
+      })
+    });
+    if (res.ok) {
+      closeModal('extractModal');
+      showToast('Archive extracted successfully!', 'success');
+      loadDirectory(destPath || currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Extract failed: ' + err, 'error');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="package" class="w-3.5 h-3.5"></i><span>Extract Files</span>`;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+async function deleteSingleItem(path, name) {
+  if (!confirm(`Are you sure you want to permanently delete '${name}'?`)) return;
+
+  try {
+    const res = await fetch('/api/files/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    if (res.ok) {
+      selectedPaths.delete(path);
+      updateSelectionUI();
+      showToast(`'${name}' deleted`, 'info');
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Delete failed: ' + err, 'error');
+    }
+  } catch (e) {
+    showToast('Network error: ' + e, 'error');
+  }
+}
+
+async function confirmBatchDelete() {
+  const count = selectedPaths.size;
+  if (count === 0) return;
+  if (!confirm(`Are you sure you want to permanently delete these ${count} selected items? This action cannot be undone.`)) return;
+
+  const paths = Array.from(selectedPaths);
+  try {
+    const res = await fetch('/api/files/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths })
+    });
+    if (res.ok) {
+      selectedPaths.clear();
+      updateSelectionUI();
+      showToast(`Successfully deleted ${count} items`, 'success');
+      loadDirectory(currentPath);
+    } else {
+      const err = await res.text();
+      showToast('Delete failed: ' + err, 'error');
+    }
+  } catch (e) {
+    showToast('Network error: ' + e, 'error');
+  }
+}
+
+async function handleFileUpload(input) {
+  if (!input.files || input.files.length === 0) return;
+  const files = Array.from(input.files);
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', currentPath);
+
+    try {
+      const res = await fetch('/api/files/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } catch (e) {
+      failCount++;
+    }
+  }
+
+  input.value = '';
+  if (successCount > 0) {
+    showToast(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}!`, 'success');
+    loadDirectory(currentPath);
+  }
+  if (failCount > 0) {
+    showToast(`Failed to upload ${failCount} file${failCount > 1 ? 's' : ''}`, 'error');
+  }
+}
+
+// ==========================================
+// CODE EDITOR CONTROLLER
+// ==========================================
+
 let editingFilePath = '';
 
 async function openEditor(filePath) {
@@ -266,7 +1124,7 @@ async function openEditor(filePath) {
     const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
     if (!res.ok) {
       const err = await res.text();
-      alert('Cannot open file: ' + err);
+      showToast('Cannot open file: ' + err, 'error');
       closeEditor();
       return;
     }
@@ -274,7 +1132,7 @@ async function openEditor(filePath) {
     document.getElementById('editorTextarea').value = data.content;
     document.getElementById('editorStatus').textContent = `Size: ${(data.size / 1024).toFixed(1)} KB`;
   } catch (err) {
-    alert('Failed to read file: ' + err);
+    showToast('Failed to read file: ' + err, 'error');
     closeEditor();
   }
 }
@@ -298,105 +1156,17 @@ async function saveCurrentFile() {
     });
     if (res.ok) {
       status.textContent = 'Saved successfully!';
+      showToast('File saved successfully!', 'success');
       setTimeout(() => { status.textContent = ''; }, 3000);
       loadDirectory(currentPath);
     } else {
       const err = await res.text();
-      alert('Failed to save file: ' + err);
+      showToast('Failed to save file: ' + err, 'error');
       status.textContent = 'Save failed';
     }
   } catch (err) {
-    alert('Network error: ' + err);
+    showToast('Network error: ' + err, 'error');
     status.textContent = 'Error';
-  }
-}
-
-// File actions
-async function promptNewFile() {
-  const name = prompt('Enter new file name (e.g. info.php, style.css):');
-  if (!name) return;
-
-  try {
-    const res = await fetch('/api/files/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: currentPath, name, is_dir: false })
-    });
-    if (res.ok) {
-      loadDirectory(currentPath);
-    } else {
-      const err = await res.text();
-      alert('Error creating file: ' + err);
-    }
-  } catch (e) {
-    alert('Network error: ' + e);
-  }
-}
-
-async function promptNewFolder() {
-  const name = prompt('Enter new folder name:');
-  if (!name) return;
-
-  try {
-    const res = await fetch('/api/files/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: currentPath, name, is_dir: true })
-    });
-    if (res.ok) {
-      loadDirectory(currentPath);
-    } else {
-      const err = await res.text();
-      alert('Error creating folder: ' + err);
-    }
-  } catch (e) {
-    alert('Network error: ' + e);
-  }
-}
-
-async function deleteItem(path, name) {
-  if (!confirm(`Are you sure you want to permanently delete '${name}'?`)) return;
-
-  try {
-    const res = await fetch('/api/files/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path })
-    });
-    if (res.ok) {
-      loadDirectory(currentPath);
-    } else {
-      const err = await res.text();
-      alert('Delete failed: ' + err);
-    }
-  } catch (e) {
-    alert('Network error: ' + e);
-  }
-}
-
-async function handleFileUpload(input) {
-  if (!input.files || input.files.length === 0) return;
-  const file = input.files[0];
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('path', currentPath);
-
-  try {
-    const res = await fetch('/api/files/upload', {
-      method: 'POST',
-      body: formData
-    });
-    if (res.ok) {
-      alert(`File '${file.name}' uploaded successfully!`);
-      loadDirectory(currentPath);
-    } else {
-      const err = await res.text();
-      alert('Upload failed: ' + err);
-    }
-  } catch (e) {
-    alert('Upload error: ' + e);
-  } finally {
-    input.value = '';
   }
 }
 </script>
