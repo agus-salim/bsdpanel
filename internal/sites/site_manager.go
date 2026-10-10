@@ -110,9 +110,9 @@ func (m *SiteManager) CreateSite(ctx context.Context, site *Site) error {
 		return fmt.Errorf("vhost config error: %w", err)
 	}
 
-	// Step 5: Reload Web Server & PHP-FPM
+	// Step 5: Start/Restart PHP-FPM pool & reload Web Server
+	_ = m.restartPHP(ctx, site.PHPVersion)
 	_ = m.serviceMgr.Reload(ctx, site.WebServer)
-	_ = m.serviceMgr.Reload(ctx, fmt.Sprintf("php%s-fpm", strings.ReplaceAll(site.PHPVersion, ".", "")))
 
 	// Save site metadata
 	return m.saveSiteRecord(site)
@@ -131,16 +131,17 @@ listen.owner = %s
 listen.group = www
 listen.mode = 0660
 
-pm = ondemand
-pm.max_children = 10
-pm.process_idle_timeout = 60s
-pm.max_requests = 500
+pm = dynamic
+pm.max_children = 5
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 3
 
 chdir = %s
-php_admin_value[open_basedir] = %s:/tmp:/var/tmp
-php_admin_value[session.save_path] = /usr/home/%s/tmp
-php_admin_value[upload_tmp_dir] = /usr/home/%s/tmp
-`, site.Domain, site.SystemUser, site.SystemUser, site.SystemUser, sockPath, site.SystemUser, site.DocumentRoot, site.DocumentRoot, site.SystemUser, site.SystemUser)
+php_admin_value[open_basedir] = /usr/home/%s:/tmp:/var/tmp
+php_admin_value[session.save_path] = /tmp
+php_admin_value[upload_tmp_dir] = /tmp
+`, site.Domain, site.SystemUser, site.SystemUser, site.SystemUser, sockPath, site.SystemUser, site.DocumentRoot, site.SystemUser)
 
 	confFile := filepath.Join(m.phpPoolDir, fmt.Sprintf("%s.conf", site.SystemUser))
 	_ = os.MkdirAll(m.phpPoolDir, 0755)
@@ -283,9 +284,74 @@ func (m *SiteManager) EnsureNginxConfigured(ctx context.Context) error {
 	return nil
 }
 
+// EnsurePHPConfigured verifies that /usr/local/etc/php-fpm.conf exists and includes php-fpm.d.
+func (m *SiteManager) EnsurePHPConfigured(ctx context.Context) error {
+	_ = os.MkdirAll("/usr/local/etc/php-fpm.d", 0755)
+
+	mainConf := "/usr/local/etc/php-fpm.conf"
+	defaultConf := "/usr/local/etc/php-fpm.conf.default"
+
+	// 1. If php-fpm.conf does not exist, copy from default or create clean minimal config
+	if _, err := os.Stat(mainConf); os.IsNotExist(err) {
+		if content, err := os.ReadFile(defaultConf); err == nil {
+			_ = os.WriteFile(mainConf, content, 0644)
+		} else {
+			minimal := `[global]
+pid = /var/run/php-fpm.pid
+error_log = /var/log/php-fpm.log
+log_level = notice
+include = /usr/local/etc/php-fpm.d/*.conf
+`
+			_ = os.WriteFile(mainConf, []byte(minimal), 0644)
+		}
+	}
+
+	// 2. Ensure include = /usr/local/etc/php-fpm.d/*.conf is uncommented
+	if content, err := os.ReadFile(mainConf); err == nil {
+		str := string(content)
+		modified := false
+		if strings.Contains(str, ";include=/usr/local/etc/php-fpm.d/*.conf") {
+			str = strings.ReplaceAll(str, ";include=/usr/local/etc/php-fpm.d/*.conf", "include=/usr/local/etc/php-fpm.d/*.conf")
+			modified = true
+		} else if strings.Contains(str, ";include = /usr/local/etc/php-fpm.d/*.conf") {
+			str = strings.ReplaceAll(str, ";include = /usr/local/etc/php-fpm.d/*.conf", "include = /usr/local/etc/php-fpm.d/*.conf")
+			modified = true
+		} else if !strings.Contains(str, "php-fpm.d/*.conf") {
+			str += "\ninclude = /usr/local/etc/php-fpm.d/*.conf\n"
+			modified = true
+		}
+		if modified {
+			_ = os.WriteFile(mainConf, []byte(str), 0644)
+		}
+	}
+
+	// 3. Ensure php_fpm is enabled in /etc/rc.conf
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/sysrc", "php_fpm_enable=YES")
+
+	return nil
+}
+
+// restartPHP restarts FreeBSD php-fpm daemon using canonical and version-tagged service names.
+func (m *SiteManager) restartPHP(ctx context.Context, version string) error {
+	// Canonical FreeBSD rc service
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/service", "php-fpm", "onerestart")
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/service", "php-fpm", "onestart")
+
+	// Versioned service (e.g. php83-fpm) if custom port
+	if version != "" {
+		tag := strings.ReplaceAll(version, ".", "")
+		svcName := fmt.Sprintf("php%s-fpm", tag)
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "onerestart")
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "onestart")
+	}
+
+	return nil
+}
+
 // SyncAllVHosts regenerates vhost configs directly into conf.d, repairs permissions, and reloads web services.
 func (m *SiteManager) SyncAllVHosts(ctx context.Context) error {
 	_ = m.EnsureNginxConfigured(ctx)
+	_ = m.EnsurePHPConfigured(ctx)
 
 	sites, err := m.ListSites()
 	if err != nil {
@@ -304,11 +370,11 @@ func (m *SiteManager) SyncAllVHosts(ctx context.Context) error {
 		_, _ = m.exec.Execute(ctx, "/usr/sbin/pw", "groupmod", siteCopy.SystemUser, "-m", "www")
 	}
 
-	// Reload services
+	// Restart PHP-FPM first to create sockets
+	_ = m.restartPHP(ctx, "8.3")
+
+	// Reload web server
 	_ = m.serviceMgr.Reload(ctx, "nginx")
-	_ = m.serviceMgr.Reload(ctx, "php83-fpm")
-	_ = m.serviceMgr.Reload(ctx, "php82-fpm")
-	_ = m.serviceMgr.Reload(ctx, "php84-fpm")
 
 	return nil
 }
