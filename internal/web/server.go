@@ -1,11 +1,15 @@
 package web
 
 import (
+	"crypto/rand"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"bsdpanel/internal/config"
@@ -26,6 +30,8 @@ type Server struct {
 	dbMgr       *database.DatabaseManager
 	tmpl        *template.Template
 	staticFS    http.FileSystem
+	sessions    map[string]time.Time
+	sessMu      sync.RWMutex
 }
 
 // NewServer constructs the Web Server instance.
@@ -62,6 +68,7 @@ func NewServer(
 		dbMgr:       dbMgr,
 		tmpl:        tmpl,
 		staticFS:    http.FS(staticSub),
+		sessions:    make(map[string]time.Time),
 	}
 
 	return s, nil
@@ -71,10 +78,14 @@ func NewServer(
 func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
 
-	// Static assets (CSS, Fonts, SVG Icons)
+	// Public static assets
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(s.staticFS)))
 
-	// Web UI Pages
+	// Authentication routes
+	mux.HandleFunc("/login", s.handleLoginPage)
+	mux.HandleFunc("/logout", s.handleLogout)
+
+	// Web UI Pages (Protected)
 	mux.HandleFunc("/", s.handleDashboardPage)
 	mux.HandleFunc("/sites", s.handleSitesPage)
 	mux.HandleFunc("/services", s.handleServicesPage)
@@ -82,7 +93,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/firewall", s.handleFirewallPage)
 	mux.HandleFunc("/terminal", s.handleTerminalPage)
 
-	// REST API Endpoints
+	// REST API Endpoints (Protected)
 	mux.HandleFunc("/api/stats", s.handleAPIStats)
 	mux.HandleFunc("/api/sites", s.handleAPISites)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
@@ -91,8 +102,65 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/firewall", s.handleAPIFirewall)
 	mux.HandleFunc("/api/logs", s.handleAPILogs)
 
-	// Wrap with security & timing middleware
-	return s.securityMiddleware(mux)
+	// Wrap with security & authentication middleware
+	return s.securityMiddleware(s.authMiddleware(mux))
+}
+
+// authMiddleware protects private routes from unauthenticated access.
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "/login" || strings.HasPrefix(path, "/static/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		cookie, err := r.Cookie("bsdpanel_session")
+		if err != nil || !s.isValidSession(cookie.Value) {
+			if strings.HasPrefix(path, "/api/") {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Session helper methods
+func (s *Server) createSession() string {
+	b := make([]byte, 24)
+	_, _ = rand.Read(b)
+	token := hex.EncodeToString(b)
+
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	s.sessions[token] = time.Now().Add(24 * time.Hour)
+	return token
+}
+
+func (s *Server) isValidSession(token string) bool {
+	if token == "" {
+		return false
+	}
+	s.sessMu.RLock()
+	defer s.sessMu.RUnlock()
+	exp, exists := s.sessions[token]
+	if !exists {
+		return false
+	}
+	return time.Now().Before(exp)
+}
+
+func (s *Server) deleteSession(token string) {
+	if token == "" {
+		return
+	}
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	delete(s.sessions, token)
 }
 
 // Start begins listening on the configured address.

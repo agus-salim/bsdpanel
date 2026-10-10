@@ -17,12 +17,14 @@ type Config struct {
 	PanelDomain      string   `json:"panel_domain"`
 	AllowedHosts     []string `json:"allowed_hosts"`
 	SessionSecret    string   `json:"session_secret"`
+	AdminUser        string   `json:"admin_user"`
+	AdminPassword    string   `json:"admin_password"`
 }
 
 // DefaultConfig provides safe, standard defaults tailored for FreeBSD.
 func DefaultConfig() *Config {
 	return &Config{
-		Host:             "127.0.0.1",
+		Host:             "0.0.0.0",
 		Port:             8880,
 		DataDir:          "/var/db/bsdpanel",
 		SitesDir:         "/usr/home",
@@ -30,8 +32,10 @@ func DefaultConfig() *Config {
 		DefaultPHP:       "8.3",
 		DoasEnabled:      true,
 		PanelDomain:      "panel.local",
-		AllowedHosts:     []string{"127.0.0.1", "localhost"},
-		SessionSecret:    "change-this-ultra-secure-secret-key",
+		AllowedHosts:     []string{"*"},
+		SessionSecret:    "bsd-panel-secure-auth-secret-key-2026",
+		AdminUser:        "pengelola",
+		AdminPassword:    "Suksesterus123#",
 	}
 }
 
@@ -48,6 +52,15 @@ func Load(path string) (*Config, error) {
 
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
+	}
+	if cfg.AdminUser == "" {
+		cfg.AdminUser = "pengelola"
+	}
+	if cfg.AdminPassword == "" {
+		cfg.AdminPassword = "Suksesterus123#"
+	}
+	if cfg.Host == "127.0.0.1" {
+		cfg.Host = "0.0.0.0"
 	}
 	return cfg, nil
 }

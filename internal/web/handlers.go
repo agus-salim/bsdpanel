@@ -29,6 +29,61 @@ type SystemStats struct {
 	PFActive    bool    `json:"pf_active"`
 }
 
+// handleLoginPage processes user login authentication.
+func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		cookie, err := r.Cookie("bsdpanel_session")
+		if err == nil && s.isValidSession(cookie.Value) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		_ = s.tmpl.ExecuteTemplate(w, "login.html", map[string]interface{}{})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+
+		if username == s.cfg.AdminUser && password == s.cfg.AdminPassword {
+			token := s.createSession()
+			http.SetCookie(w, &http.Cookie{
+				Name:     "bsdpanel_session",
+				Value:    token,
+				Path:     "/",
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+				MaxAge:   86400,
+			})
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+
+		_ = s.tmpl.ExecuteTemplate(w, "login.html", map[string]interface{}{
+			"Error": "Username atau password salah!",
+		})
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleLogout ends the active user session.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("bsdpanel_session")
+	if err == nil {
+		s.deleteSession(cookie.Value)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "bsdpanel_session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
 // handleDashboardPage renders the main compact dashboard.
 func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
