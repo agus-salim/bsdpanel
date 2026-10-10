@@ -19,19 +19,25 @@ load_rc_config $name
 : ${bsdpanel_group:="bsdpanel"}
 : ${bsdpanel_config:="/usr/local/etc/bsdpanel.json"}
 
-command="/usr/local/bin/bsdpanel"
-command_args="-config ${bsdpanel_config} > /var/log/bsdpanel.log 2>&1 &"
+pidfile="/var/run/${name}.pid"
+procname="/usr/local/bin/bsdpanel"
+command="/usr/sbin/daemon"
+command_args="-c -f -p ${pidfile} -u ${bsdpanel_user} -o /var/log/bsdpanel.log ${procname} -config ${bsdpanel_config}"
 
 start_precmd="bsdpanel_prestart"
 
 bsdpanel_prestart()
 {
-    if [ ! -f "${bsdpanel_config}" ]; then
-        echo "Creating default configuration at ${bsdpanel_config}..."
-        mkdir -p /usr/local/etc
+    # Ensure runtime data directory exists and is owned by daemon user
+    if [ ! -d "/var/db/bsdpanel" ]; then
         mkdir -p /var/db/bsdpanel
         chown -R ${bsdpanel_user}:${bsdpanel_group} /var/db/bsdpanel
     fi
+
+    # Ensure log file exists and is writable
+    touch /var/log/bsdpanel.log
+    chown ${bsdpanel_user}:${bsdpanel_group} /var/log/bsdpanel.log
+    chmod 0640 /var/log/bsdpanel.log
 }
 
 run_rc_command "$1"
