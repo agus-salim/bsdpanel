@@ -178,10 +178,6 @@ func (s *Server) isServiceInstalled(ctx context.Context, item ServiceItem) bool 
 		if _, err := os.Stat("/usr/local/bin/php84"); err == nil {
 			return true
 		}
-	case "php85":
-		if _, err := os.Stat("/usr/local/bin/php85"); err == nil {
-			return true
-		}
 	case "mariadb":
 		if _, err := os.Stat("/usr/local/libexec/mariadbd"); err == nil {
 			return true
@@ -263,14 +259,6 @@ func (s *Server) getServicesCatalog(ctx context.Context) []ServiceItem {
 			PkgName:     "php84",
 			Category:    "PHP Engine",
 			Description: "FastCGI Process Manager for PHP 8.4 with core extensions",
-		},
-		{
-			ID:          "php85",
-			Name:        "PHP 8.5-FPM",
-			ServiceName: "php-fpm",
-			PkgName:     "php85",
-			Category:    "PHP Engine",
-			Description: "Experimental PHP 8.5 builds from FreeBSD Ports",
 		},
 		// Databases
 		{
@@ -971,7 +959,7 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 	case "fail2ban":
 		pkgs = []string{"fail2ban"}
 		rcService = "fail2ban"
-	case "php82", "php83", "php84", "php85":
+	case "php82", "php83", "php84":
 		version := strings.TrimPrefix(pkgKey, "php")
 		if len(version) == 2 {
 			version = string(version[0]) + "." + string(version[1])
@@ -1070,7 +1058,7 @@ func (s *Server) handleAPIServiceUninstall(w http.ResponseWriter, r *http.Reques
 		pkgs = []string{"postgresql16-server", "postgresql16-client"}
 	case "fail2ban":
 		pkgs = []string{"fail2ban"}
-	case "php82", "php83", "php84", "php85":
+	case "php82", "php83", "php84":
 		version := strings.TrimPrefix(pkgKey, "php")
 		if len(version) == 2 {
 			version = string(version[0]) + "." + string(version[1])
