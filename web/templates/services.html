@@ -86,6 +86,58 @@
 <!-- Floating Toast Notification -->
 <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
+<!-- Detailed Error / Diagnostics Modal -->
+<div id="serviceErrorModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-all">
+  <div class="bg-dark-900 border border-slate-700/80 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <!-- Modal Header -->
+    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-dark-950/90">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 flex-shrink-0">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="errorModalTitle" class="text-sm font-bold text-slate-100">Gagal Menjalankan Service</h3>
+          <p id="errorModalSubtitle" class="text-[11px] text-slate-400 font-mono mt-0.5">Diagnostik Sistem FreeBSD</p>
+        </div>
+      </div>
+      <button onclick="closeErrorModal()" class="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="p-5 space-y-4 overflow-y-auto">
+      <!-- Highlight Alert -->
+      <div class="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5"></i>
+        <div id="errorModalMessage" class="space-y-1 font-medium leading-relaxed whitespace-pre-line text-xs"></div>
+      </div>
+
+      <!-- Log / Details Box -->
+      <div id="errorModalDetailsContainer" class="space-y-1.5 hidden">
+        <div class="flex items-center justify-between">
+          <label class="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="terminal" class="w-3.5 h-3.5 text-sky-400"></i>
+            <span>Detail Diagnostik & Output Log FreeBSD</span>
+          </label>
+          <button onclick="copyErrorDetails()" class="inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 transition-all cursor-pointer">
+            <i data-lucide="copy" class="w-3 h-3" id="copyDetailsIcon"></i>
+            <span id="copyDetailsText">Salin Log</span>
+          </button>
+        </div>
+        <pre id="errorModalDetails" class="p-3.5 rounded-xl bg-dark-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto max-h-56 leading-relaxed select-text whitespace-pre-wrap break-words"></pre>
+      </div>
+    </div>
+
+    <!-- Modal Footer -->
+    <div class="px-5 py-3.5 border-t border-slate-800 bg-dark-950/60 flex items-center justify-end gap-2.5">
+      <button onclick="closeErrorModal()" class="px-4 py-2 rounded-lg bg-dark-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
+        Tutup
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 let servicesData = [];
 let currentCategory = 'all';
@@ -254,7 +306,7 @@ function renderTable(items) {
     let actionsHtml = '';
     if (!item.is_installed) {
       actionsHtml = `
-        <button onclick="installService('${item.id}', '${item.pkg_name}', '${item.service_name}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-all cursor-pointer shadow-sm">
+        <button onclick="installService(this, '${item.id}', '${item.pkg_name}', '${item.service_name}')" class="service-action-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-all cursor-pointer shadow-sm">
           <i data-lucide="download" class="w-3.5 h-3.5"></i>
           <span>Install</span>
         </button>
@@ -263,26 +315,26 @@ function renderTable(items) {
       actionsHtml = `
         <div class="inline-flex items-center gap-1.5">
           <!-- Start Button -->
-          <button onclick="executeServiceAction('${item.service_name}', 'start')" title="Start Service" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+          <button onclick="executeServiceAction(this, '${item.service_name}', 'start')" title="Start Service" class="service-action-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
             <i data-lucide="play" class="w-3.5 h-3.5"></i>
             <span>Start</span>
           </button>
 
           <!-- Reload Button -->
-          <button onclick="executeServiceAction('${item.service_name}', 'reload')" title="Reload Configuration" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+          <button onclick="executeServiceAction(this, '${item.service_name}', 'reload')" title="Reload Configuration" class="service-action-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
             <span>Reload</span>
           </button>
 
           <!-- Stop Button -->
-          <button onclick="executeServiceAction('${item.service_name}', 'stop')" title="Stop Service" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+          <button onclick="executeServiceAction(this, '${item.service_name}', 'stop')" title="Stop Service" class="service-action-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
             <i data-lucide="square" class="w-3.5 h-3.5"></i>
             <span>Stop</span>
           </button>
 
           <!-- Uninstall Button (if not base system component) -->
           ${!item.is_base ? `
-            <button onclick="uninstallService('${item.id}', '${item.pkg_name}', '${item.service_name}', '${item.name}')" title="Uninstall Service" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
+            <button onclick="uninstallService(this, '${item.id}', '${item.pkg_name}', '${item.service_name}', '${item.name}')" title="Uninstall Service" class="service-action-btn inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/40 text-xs font-medium transition-all cursor-pointer shadow-sm">
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               <span>Uninstall</span>
             </button>
@@ -324,16 +376,78 @@ function renderTable(items) {
 }
 
 // ==========================================
-// ACTION HANDLERS
+// ACTION & MODAL HANDLERS
 // ==========================================
 
-async function executeServiceAction(serviceName, action) {
+function setButtonsDisabled(disabled, currentBtn = null) {
+  document.querySelectorAll('.service-action-btn').forEach(b => {
+    if (b !== currentBtn) {
+      b.disabled = disabled;
+      if (disabled) {
+        b.classList.add('opacity-50', 'pointer-events-none');
+      } else {
+        b.classList.remove('opacity-50', 'pointer-events-none');
+      }
+    }
+  });
+}
+
+function showErrorModal(title, subtitle, message, details) {
+  document.getElementById('errorModalTitle').textContent = title || 'Terjadi Kesalahan';
+  document.getElementById('errorModalSubtitle').textContent = subtitle || 'Diagnostik Sistem FreeBSD';
+  document.getElementById('errorModalMessage').textContent = message || '';
+  
+  const detailsEl = document.getElementById('errorModalDetails');
+  const detailsContainer = document.getElementById('errorModalDetailsContainer');
+  if (details && details.trim().length > 0) {
+    detailsEl.textContent = details.trim();
+    detailsContainer.classList.remove('hidden');
+  } else {
+    detailsContainer.classList.add('hidden');
+  }
+
+  const modal = document.getElementById('serviceErrorModal');
+  modal.classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function closeErrorModal() {
+  document.getElementById('serviceErrorModal').classList.add('hidden');
+}
+
+function copyErrorDetails() {
+  const details = document.getElementById('errorModalDetails').textContent;
+  const message = document.getElementById('errorModalMessage').textContent;
+  const fullText = (message ? message + '\n\n' : '') + details;
+  navigator.clipboard.writeText(fullText).then(() => {
+    const textEl = document.getElementById('copyDetailsText');
+    if (textEl) {
+      textEl.textContent = 'Tersalin!';
+      setTimeout(() => { textEl.textContent = 'Salin Log'; }, 2000);
+    }
+  });
+}
+
+async function executeServiceAction(btn, serviceName, action) {
   const actionLabels = {
     'start': 'menjalankan (start)',
     'stop': 'menghentikan (stop)',
     'reload': 'mereload konfigurasi',
     'restart': 'merestart'
   };
+  const actionTitles = {
+    'start': 'Menjalankan',
+    'stop': 'Menghentikan',
+    'reload': 'Mereload',
+    'restart': 'Merestart'
+  };
+
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.classList.add('opacity-80', 'cursor-not-allowed', 'pointer-events-none');
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i>`;
+  setButtonsDisabled(true, btn);
+  if (window.renderLucideIcons) window.renderLucideIcons();
 
   showToast(`Sedang ${actionLabels[action] || action} service '${serviceName}'...`, 'info');
 
@@ -344,22 +458,52 @@ async function executeServiceAction(serviceName, action) {
       body: JSON.stringify({ service: serviceName, action: action })
     });
 
-    if (res.ok) {
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data && data.success) {
       showToast(`Service '${serviceName}' berhasil di-${action}!`, 'success');
       await loadServices();
     } else {
-      const err = await res.text();
-      showToast(`Gagal ${action} '${serviceName}': ${err}`, 'error');
+      const errMsg = (data && data.error) ? data.error : `Gagal melakukan ${action} pada '${serviceName}'.`;
+      const errDetails = (data && data.details) ? data.details : '';
+      showToast(`Gagal ${action} '${serviceName}'`, 'error');
+      showErrorModal(
+        `Gagal ${actionTitles[action] || action} Service: ${serviceName}`,
+        `FreeBSD rc.d Service Manager (${serviceName})`,
+        errMsg,
+        errDetails
+      );
+      await loadServices();
     }
   } catch (err) {
-    showToast(`Network error: ${err}`, 'error');
+    showToast(`Network error: ${err.message}`, 'error');
+    showErrorModal(
+      `Gagal ${actionTitles[action] || action} Service: ${serviceName}`,
+      `Koneksi / Jaringan Terputus`,
+      `Tidak dapat terhubung ke server atau request timeout: ${err.message}`,
+      ''
+    );
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-80', 'cursor-not-allowed', 'pointer-events-none');
+    btn.innerHTML = originalHtml;
+    setButtonsDisabled(false);
+    if (window.renderLucideIcons) window.renderLucideIcons();
   }
 }
 
-async function installService(pkgId, pkgName, serviceName) {
-  if (!confirm(`Apakah Anda yakin ingin menginstall package '${pkgName || pkgId}' via FreeBSD pkg?`)) return;
+async function installService(btn, pkgId, pkgName, serviceName) {
+  const displayName = pkgName || pkgId;
+  if (!confirm(`Apakah Anda yakin ingin menginstall '${displayName}' via FreeBSD pkg?\nProses download dan instalasi dari repository FreeBSD akan dijalankan.`)) return;
 
-  showToast(`Sedang menginstall '${pkgName || pkgId}' via FreeBSD pkg (proses membutuhkan waktu)...`, 'info');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.classList.add('opacity-80', 'cursor-not-allowed', 'pointer-events-none');
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Menginstall...</span>`;
+  setButtonsDisabled(true, btn);
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  showToast(`Sedang menginstall '${displayName}' via FreeBSD pkg (proses membutuhkan waktu)...`, 'info');
 
   try {
     const res = await fetch('/api/services/install', {
@@ -368,22 +512,51 @@ async function installService(pkgId, pkgName, serviceName) {
       body: JSON.stringify({ package: pkgId, service: serviceName })
     });
 
-    if (res.ok) {
-      showToast(`Package '${pkgName || pkgId}' berhasil diinstall!`, 'success');
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data && data.success) {
+      showToast(`Package '${displayName}' berhasil diinstall!`, 'success');
       await loadServices();
     } else {
-      const err = await res.text();
-      showToast(`Gagal menginstall: ${err}`, 'error');
+      const errMsg = (data && data.error) ? data.error : 'Instalasi package gagal.';
+      const errDetails = (data && data.details) ? data.details : '';
+      showToast(`Gagal menginstall '${displayName}'`, 'error');
+      showErrorModal(
+        `Gagal Menginstall ${displayName}`,
+        `FreeBSD Package Manager (${pkgId})`,
+        errMsg,
+        errDetails
+      );
     }
   } catch (err) {
-    showToast(`Network error: ${err}`, 'error');
+    showToast(`Network error: ${err.message}`, 'error');
+    showErrorModal(
+      `Gagal Menginstall ${displayName}`,
+      `Koneksi / Jaringan Terputus`,
+      `Tidak dapat terhubung ke server atau permintaan timeout: ${err.message}`,
+      `Periksa koneksi jaringan dan status service BSD Panel di server.`
+    );
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-80', 'cursor-not-allowed', 'pointer-events-none');
+    btn.innerHTML = originalHtml;
+    setButtonsDisabled(false);
+    if (window.renderLucideIcons) window.renderLucideIcons();
   }
 }
 
-async function uninstallService(pkgId, pkgName, serviceName, displayName) {
-  if (!confirm(`PERINGATAN: Apakah Anda yakin ingin meng-uninstall '${displayName || pkgId}'?\nService akan dihentikan dan dinonaktifkan dari sistem FreeBSD.`)) return;
+async function uninstallService(btn, pkgId, pkgName, serviceName, displayName) {
+  const name = displayName || pkgId;
+  if (!confirm(`PERINGATAN: Apakah Anda yakin ingin meng-uninstall '${name}'?\nService akan dihentikan dan dinonaktifkan dari sistem FreeBSD.`)) return;
 
-  showToast(`Sedang meng-uninstall '${displayName}'...`, 'info');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.classList.add('opacity-80', 'cursor-not-allowed', 'pointer-events-none');
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i>`;
+  setButtonsDisabled(true, btn);
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  showToast(`Sedang meng-uninstall '${name}'...`, 'info');
 
   try {
     const res = await fetch('/api/services/uninstall', {
@@ -392,15 +565,36 @@ async function uninstallService(pkgId, pkgName, serviceName, displayName) {
       body: JSON.stringify({ package: pkgId, service: serviceName })
     });
 
-    if (res.ok) {
-      showToast(`'${displayName}' berhasil di-uninstall!`, 'success');
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data && data.success) {
+      showToast(`'${name}' berhasil di-uninstall!`, 'success');
       await loadServices();
     } else {
-      const err = await res.text();
-      showToast(`Gagal meng-uninstall: ${err}`, 'error');
+      const errMsg = (data && data.error) ? data.error : 'Gagal meng-uninstall package.';
+      const errDetails = (data && data.details) ? data.details : '';
+      showToast(`Gagal meng-uninstall: ${errMsg}`, 'error');
+      showErrorModal(
+        `Gagal Meng-uninstall ${name}`,
+        `FreeBSD Package Removal (${pkgId})`,
+        errMsg,
+        errDetails
+      );
     }
   } catch (err) {
-    showToast(`Network error: ${err}`, 'error');
+    showToast(`Network error: ${err.message}`, 'error');
+    showErrorModal(
+      `Gagal Meng-uninstall ${name}`,
+      `Koneksi / Jaringan Terputus`,
+      `Tidak dapat terhubung ke server atau request timeout: ${err.message}`,
+      ''
+    );
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-80', 'cursor-not-allowed', 'pointer-events-none');
+    btn.innerHTML = originalHtml;
+    setButtonsDisabled(false);
+    if (window.renderLucideIcons) window.renderLucideIcons();
   }
 }
 </script>

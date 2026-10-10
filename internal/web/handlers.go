@@ -515,7 +515,81 @@ func (s *Server) handleAPIServices(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(catalog)
 }
 
-// handleAPIServiceAction starts, stops, or restarts a service.
+// readLogTail reads the last maxLines from a file.
+func readLogTail(path string, maxLines int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// getServiceDiagnosticInfo extracts configuration test and error log output for a service.
+func (s *Server) getServiceDiagnosticInfo(ctx context.Context, svc string) string {
+	var b strings.Builder
+	switch svc {
+	case "apache24", "apache":
+		// Test Apache configuration syntax
+		res, err := s.exec.Execute(ctx, "/usr/local/sbin/httpd", "-t")
+		if res != nil && (res.Stderr != "" || res.Stdout != "") {
+			b.WriteString("--- Apache Config Test (httpd -t) ---\n")
+			if res.Stderr != "" {
+				b.WriteString(res.Stderr + "\n")
+			}
+			if res.Stdout != "" {
+				b.WriteString(res.Stdout + "\n")
+			}
+		} else if err != nil {
+			b.WriteString("--- Apache Config Test (httpd -t) ---\n" + err.Error() + "\n")
+		}
+
+		// Inspect Apache error log files
+		apacheLogs := []string{"/var/log/httpd-error.log", "/var/log/httpd/error.log"}
+		for _, logPath := range apacheLogs {
+			if tail := readLogTail(logPath, 25); tail != "" {
+				b.WriteString("\n--- Log Error Apache (" + logPath + ") ---\n")
+				b.WriteString(tail + "\n")
+				break
+			}
+		}
+
+		// Check if port 80 / 443 is in use
+		sockRes, _ := s.exec.Execute(ctx, "/usr/bin/sockstat", "-4", "-l", "-p", "80")
+		if sockRes != nil && sockRes.Stdout != "" {
+			b.WriteString("\n--- Proses yang Menggunakan Port 80 (sockstat) ---\n")
+			b.WriteString(sockRes.Stdout + "\n")
+		}
+
+	case "nginx":
+		res, _ := s.exec.Execute(ctx, "/usr/local/sbin/nginx", "-t")
+		if res != nil && (res.Stderr != "" || res.Stdout != "") {
+			b.WriteString("--- Nginx Config Test (nginx -t) ---\n")
+			if res.Stderr != "" {
+				b.WriteString(res.Stderr + "\n")
+			}
+			if res.Stdout != "" {
+				b.WriteString(res.Stdout + "\n")
+			}
+		}
+		if tail := readLogTail("/var/log/nginx/error.log", 25); tail != "" {
+			b.WriteString("\n--- Log Error Nginx (/var/log/nginx/error.log) ---\n")
+			b.WriteString(tail + "\n")
+		}
+		sockRes, _ := s.exec.Execute(ctx, "/usr/bin/sockstat", "-4", "-l", "-p", "80")
+		if sockRes != nil && sockRes.Stdout != "" {
+			b.WriteString("\n--- Proses yang Menggunakan Port 80 (sockstat) ---\n")
+			b.WriteString(sockRes.Stdout + "\n")
+		}
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+// handleAPIServiceAction starts, stops, or restarts a service with conflict checks and verification.
 func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -528,14 +602,67 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Request payload tidak valid",
+			"details": err.Error(),
+		})
 		return
 	}
 
 	svc := strings.TrimSpace(req.Service)
 	if svc == "" {
-		http.Error(w, "service required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Nama service wajib ditentukan",
+		})
 		return
+	}
+
+	switch svc {
+	case "apache":
+		svc = "apache24"
+	case "mariadb":
+		svc = "mysql-server"
+	}
+
+	// 1. Web server conflict detection on start / restart
+	webServers := map[string]string{
+		"nginx":         "Nginx",
+		"apache24":      "Apache 2.4",
+		"caddy":         "Caddy Server",
+		"openlitespeed": "OpenLiteSpeed",
+	}
+
+	if _, isWeb := webServers[svc]; isWeb && (req.Action == "start" || req.Action == "restart") {
+		for otherSvc, otherName := range webServers {
+			if otherSvc == svc {
+				continue
+			}
+			st, err := s.serviceMgr.Status(r.Context(), otherSvc)
+			if err == nil && st != nil && st.IsRunning {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"error":   fmt.Sprintf("Konflik Port 80/443: %s sedang berjalan", otherName),
+					"details": fmt.Sprintf("Service %s tidak dapat dijalankan karena %s saat ini sedang aktif (Running) dan mengikat port default web (80/443).\n\nLangkah Penyelesaian:\n1. Hentikan (Stop) %s terlebih dahulu melalui tombol 'Stop' pada baris %s di daftar service.\n2. Setelah %s berhenti (Stopped), klik tombol 'Start' kembali pada %s.",
+						webServers[svc], otherName, otherName, otherName, otherName, webServers[svc]),
+				})
+				return
+			}
+		}
+	}
+
+	// Ensure rc.conf has service enabled before start
+	if (req.Action == "start" || req.Action == "restart") && svc != "pf" {
+		if !s.serviceMgr.IsEnabled(r.Context(), svc) {
+			_ = s.serviceMgr.Enable(r.Context(), svc)
+		}
 	}
 
 	var err error
@@ -554,13 +681,6 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 			_, err = s.exec.Execute(r.Context(), "/sbin/pfctl", "-e")
 		}
 	} else {
-		switch svc {
-		case "apache":
-			svc = "apache24"
-		case "mariadb":
-			svc = "mysql-server"
-		}
-
 		switch req.Action {
 		case "start":
 			err = s.serviceMgr.Start(r.Context(), svc)
@@ -575,21 +695,53 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 		case "disable":
 			err = s.serviceMgr.Disable(r.Context(), svc)
 		default:
-			http.Error(w, "unknown action", http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Aksi tidak dikenal: " + req.Action,
+			})
 			return
 		}
 	}
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		diag := s.getServiceDiagnosticInfo(r.Context(), svc)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Gagal melakukan %s pada service '%s'", req.Action, svc),
+			"details": err.Error() + "\n\n" + diag,
+		})
 		return
 	}
 
+	// Post-start verification: verify daemon is actually alive
+	if req.Action == "start" || req.Action == "restart" {
+		time.Sleep(600 * time.Millisecond)
+		st, statusErr := s.serviceMgr.Status(r.Context(), svc)
+		if statusErr == nil && st != nil && !st.IsRunning {
+			diag := s.getServiceDiagnosticInfo(r.Context(), svc)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("Service '%s' gagal berjalan (daemon berhenti setelah start)", svc),
+				"details": fmt.Sprintf("Perintah start selesai namun daemon '%s' tidak terdeteksi berjalan (PID mati).\nKemungkinan terjadi kesalahan konfigurasi, konflik port, atau permission file.\n\n%s", svc, diag),
+			})
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Service '%s' berhasil di-%s", svc, req.Action),
+	})
 }
 
-// handleAPIServiceInstall installs packages via FreeBSD pkg.
+// handleAPIServiceInstall installs packages via FreeBSD pkg with timeout and detailed error reporting.
 func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -602,7 +754,13 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Request body tidak valid",
+			"details": err.Error(),
+		})
 		return
 	}
 
@@ -644,9 +802,19 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 		rcService = req.Service
 	}
 
-	err := s.pkgMgr.Install(r.Context(), pkgs...)
+	// Use generous timeout context (10 minutes) for FreeBSD pkg operations
+	installCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	err := s.pkgMgr.Install(installCtx, pkgs...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Gagal menginstall paket '%s'", req.Package),
+			"details": fmt.Sprintf("FreeBSD pkg gagal menginstall paket [%s]:\n\n%s", strings.Join(pkgs, ", "), err.Error()),
+		})
 		return
 	}
 
@@ -654,10 +822,21 @@ func (s *Server) handleAPIServiceInstall(w http.ResponseWriter, r *http.Request)
 		_ = s.serviceMgr.Enable(r.Context(), rcService)
 	}
 
+	// Setup for Apache 2.4: ensure ServerName localhost is configured to avoid AH00558 warning
+	if rcService == "apache24" {
+		confPath := "/usr/local/etc/apache24/httpd.conf"
+		if data, readErr := os.ReadFile(confPath); readErr == nil {
+			content := string(data)
+			if !strings.Contains(content, "ServerName localhost") && !strings.Contains(content, "ServerName 127.0.0.1") {
+				_ = os.WriteFile(confPath, []byte(content+"\nServerName localhost:80\n"), 0644)
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": fmt.Sprintf("Successfully installed %s", req.Package),
+		"message": fmt.Sprintf("Berhasil menginstall paket '%s'", req.Package),
 	})
 }
 
@@ -674,7 +853,12 @@ func (s *Server) handleAPIServiceUninstall(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Request body tidak valid",
+		})
 		return
 	}
 
@@ -712,14 +896,30 @@ func (s *Server) handleAPIServiceUninstall(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	uninstallCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	var errs []string
 	for _, p := range pkgs {
-		_ = s.pkgMgr.Uninstall(r.Context(), p)
+		if err := s.pkgMgr.Uninstall(uninstallCtx, p); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %s", p, err.Error()))
+		}
+	}
+
+	if len(errs) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Sebagian paket gagal di-uninstall: %s", strings.Join(errs, "; ")),
+		})
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": fmt.Sprintf("Successfully uninstalled %s", req.Package),
+		"message": fmt.Sprintf("Berhasil meng-uninstall paket '%s'", req.Package),
 	})
 }
 
