@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -36,6 +37,15 @@ func main() {
 	firewallMgr := system.NewFirewallManager(exec, serviceMgr)
 	siteMgr := sites.NewSiteManager(userMgr, serviceMgr, exec, cfg.DataDir)
 	dbMgr := database.NewDatabaseManager(exec)
+
+	// Automatically ensure Nginx includes conf.d and synchronize all vhosts
+	go func() {
+		if err := siteMgr.SyncAllVHosts(context.Background()); err != nil {
+			log.Printf("[WARN] Virtual host sync failed: %v\n", err)
+		} else {
+			log.Println("[INFO] Virtual hosts and PHP-FPM pools synchronized successfully.")
+		}
+	}()
 
 	// Initialize Web Server with embedded UI assets
 	server, err := web.NewServer(

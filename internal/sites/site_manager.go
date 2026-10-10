@@ -43,7 +43,7 @@ func NewSiteManager(userMgr *system.UserManager, serviceMgr *system.ServiceManag
 		serviceMgr: serviceMgr,
 		exec:       exec,
 		dataDir:    dataDir,
-		vhostDir:   "/usr/local/etc/nginx/sites-available",
+		vhostDir:   "/usr/local/etc/nginx/conf.d",
 		phpPoolDir: "/usr/local/etc/php-fpm.d",
 	}
 }
@@ -128,7 +128,7 @@ group = %s
 
 listen = %s
 listen.owner = %s
-listen.group = %s
+listen.group = www
 listen.mode = 0660
 
 pm = ondemand
@@ -140,14 +140,14 @@ chdir = %s
 php_admin_value[open_basedir] = %s:/tmp:/var/tmp
 php_admin_value[session.save_path] = /usr/home/%s/tmp
 php_admin_value[upload_tmp_dir] = /usr/home/%s/tmp
-`, site.SystemUser, site.SystemUser, site.SystemUser, site.SystemUser, sockPath, site.SystemUser, site.WebServer, site.DocumentRoot, site.DocumentRoot, site.SystemUser, site.SystemUser)
+`, site.Domain, site.SystemUser, site.SystemUser, site.SystemUser, sockPath, site.SystemUser, site.DocumentRoot, site.DocumentRoot, site.SystemUser, site.SystemUser)
 
 	confFile := filepath.Join(m.phpPoolDir, fmt.Sprintf("%s.conf", site.SystemUser))
 	_ = os.MkdirAll(m.phpPoolDir, 0755)
 	return os.WriteFile(confFile, []byte(confContent), 0644)
 }
 
-// generateVHostConfig generates Nginx vhost config.
+// generateVHostConfig generates Nginx vhost config in /usr/local/etc/nginx/conf.d/<domain>.conf
 func (m *SiteManager) generateVHostConfig(site *Site) error {
 	sockPath := fmt.Sprintf("unix:/var/run/php-fpm-%s.sock", site.SystemUser)
 	var config string
@@ -155,7 +155,7 @@ func (m *SiteManager) generateVHostConfig(site *Site) error {
 	if site.IsReverseProxy {
 		config = fmt.Sprintf(`server {
     listen 80;
-    server_name %s;
+    server_name %s www.%s;
 
     access_log /usr/home/%s/logs/access.log;
     error_log /usr/home/%s/logs/error.log;
@@ -168,13 +168,13 @@ func (m *SiteManager) generateVHostConfig(site *Site) error {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-`, site.Domain, site.SystemUser, site.SystemUser, site.ProxyUpstream)
+`, site.Domain, site.Domain, site.SystemUser, site.SystemUser, site.ProxyUpstream)
 	} else {
 		config = fmt.Sprintf(`server {
     listen 80;
-    server_name %s;
+    server_name %s www.%s;
     root %s;
-    index index.php index.html;
+    index index.php index.html index.htm;
 
     access_log /usr/home/%s/logs/access.log;
     error_log /usr/home/%s/logs/error.log;
@@ -194,12 +194,21 @@ func (m *SiteManager) generateVHostConfig(site *Site) error {
         deny all;
     }
 }
-`, site.Domain, site.DocumentRoot, site.SystemUser, site.SystemUser, sockPath)
+`, site.Domain, site.Domain, site.DocumentRoot, site.SystemUser, site.SystemUser, sockPath)
 	}
 
 	_ = os.MkdirAll(m.vhostDir, 0755)
 	vhostPath := filepath.Join(m.vhostDir, fmt.Sprintf("%s.conf", site.Domain))
-	return os.WriteFile(vhostPath, []byte(config), 0644)
+	if err := os.WriteFile(vhostPath, []byte(config), 0644); err != nil {
+		return err
+	}
+
+	// Also write to sites-available for backwards compatibility
+	legacyDir := "/usr/local/etc/nginx/sites-available"
+	_ = os.MkdirAll(legacyDir, 0755)
+	_ = os.WriteFile(filepath.Join(legacyDir, fmt.Sprintf("%s.conf", site.Domain)), []byte(config), 0644)
+
+	return nil
 }
 
 // RequestLetEncryptSSL issues automated SSL certificate via certbot or acme.sh
@@ -248,4 +257,58 @@ func (m *SiteManager) ListSites() ([]Site, error) {
 		}
 	}
 	return result, nil
+}
+
+// EnsureNginxConfigured verifies that /usr/local/etc/nginx/nginx.conf includes conf.d/*.conf.
+func (m *SiteManager) EnsureNginxConfigured(ctx context.Context) error {
+	_ = os.MkdirAll("/usr/local/etc/nginx/conf.d", 0755)
+	_ = os.MkdirAll("/usr/local/etc/php-fpm.d", 0755)
+
+	nginxConfPath := "/usr/local/etc/nginx/nginx.conf"
+	content, err := os.ReadFile(nginxConfPath)
+	if err != nil {
+		return nil // Nginx config not yet present
+	}
+
+	confStr := string(content)
+	if !strings.Contains(confStr, "conf.d/*.conf") {
+		// Insert include directive inside http { ... }
+		if lastBrace := strings.LastIndex(confStr, "}"); lastBrace != -1 {
+			insertion := "\n    # Virtual hosts included by BSD Panel\n    include /usr/local/etc/nginx/conf.d/*.conf;\n"
+			newConf := confStr[:lastBrace] + insertion + confStr[lastBrace:]
+			_ = os.WriteFile(nginxConfPath, []byte(newConf), 0644)
+		}
+	}
+
+	return nil
+}
+
+// SyncAllVHosts regenerates vhost configs directly into conf.d, repairs permissions, and reloads web services.
+func (m *SiteManager) SyncAllVHosts(ctx context.Context) error {
+	_ = m.EnsureNginxConfigured(ctx)
+
+	sites, err := m.ListSites()
+	if err != nil {
+		return err
+	}
+
+	for _, s := range sites {
+		siteCopy := s
+		_ = m.generateVHostConfig(&siteCopy)
+		_ = m.generatePHPFPMPool(&siteCopy)
+
+		// Fix filesystem permissions so user 'www' can read public_html
+		homeDir := filepath.Join("/usr/home", siteCopy.SystemUser)
+		_, _ = m.exec.Execute(ctx, "/bin/chmod", "0755", homeDir)
+		_, _ = m.exec.Execute(ctx, "/bin/chmod", "-R", "0755", filepath.Join(homeDir, "public_html"))
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/pw", "groupmod", siteCopy.SystemUser, "-m", "www")
+	}
+
+	// Reload services
+	_ = m.serviceMgr.Reload(ctx, "nginx")
+	_ = m.serviceMgr.Reload(ctx, "php83-fpm")
+	_ = m.serviceMgr.Reload(ctx, "php82-fpm")
+	_ = m.serviceMgr.Reload(ctx, "php84-fpm")
+
+	return nil
 }

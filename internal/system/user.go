@@ -49,15 +49,23 @@ func (u *UserManager) CreateSiteUser(ctx context.Context, username, homedir stri
 		return fmt.Errorf("failed to create FreeBSD user '%s': %w", username, err)
 	}
 
-	// Restrict home directory permissions so other site users cannot inspect it
-	// chmod 0750 /usr/home/<username>
+	// Set home directory permissions so www (Nginx/Apache) can access public_html
 	chmodCmd := "/bin/chmod"
-	chmodArgs := []string{"0750", homedir}
+	chmodArgs := []string{"0755", homedir}
 	if u.exec.UseDoas {
 		chmodArgs = append([]string{chmodCmd}, chmodArgs...)
 		chmodCmd = "/usr/local/bin/doas"
 	}
 	_, _ = u.exec.Execute(ctx, chmodCmd, chmodArgs...)
+
+	// Add www daemon user to the tenant group
+	pwGroupCmd := "/usr/sbin/pw"
+	pwGroupArgs := []string{"groupmod", username, "-m", "www"}
+	if u.exec.UseDoas {
+		pwGroupArgs = append([]string{pwGroupCmd}, pwGroupArgs...)
+		pwGroupCmd = "/usr/local/bin/doas"
+	}
+	_, _ = u.exec.Execute(ctx, pwGroupCmd, pwGroupArgs...)
 
 	// Create standard web folder structure: public_html, logs, ssl, tmp
 	subdirs := []string{"public_html", "logs", "ssl", "tmp"}
