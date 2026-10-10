@@ -41,12 +41,12 @@ func NewServer(
 	embeddedAssets embed.FS,
 ) (*Server, error) {
 	// Parse templates from embedded assets or local disk
-	tmpl, err := template.ParseFS(embeddedAssets, "web/templates/*.html")
+	tmpl, err := template.ParseFS(embeddedAssets, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse templates: %w", err)
 	}
 
-	staticSub, err := fs.Sub(embeddedAssets, "web/static")
+	staticSub, err := fs.Sub(embeddedAssets, "static")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load static sub-filesystem: %w", err)
 	}

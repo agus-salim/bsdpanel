@@ -14,10 +14,8 @@ import (
 	"bsdpanel/internal/sites"
 	"bsdpanel/internal/system"
 	"bsdpanel/internal/web"
+	webassets "bsdpanel/web"
 )
-
-//go:embed web/templates/* web/static/*
-var embeddedAssets embed.FS
 
 func main() {
 	configPath := flag.String("config", "config.json", "Path to bsdpanel configuration file")
@@ -50,7 +48,7 @@ func main() {
 		firewallMgr,
 		siteMgr,
 		dbMgr,
-		embeddedAssets,
+		webassets.Assets,
 	)
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to initialize web server: %v", err)
