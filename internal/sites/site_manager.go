@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -329,6 +330,26 @@ server {
 	return nil
 }
 
+// findCertbotBinary checks for certbot binary in standard FreeBSD paths.
+func findCertbotBinary() string {
+	candidates := []string{
+		"/usr/local/bin/certbot",
+		"/usr/local/bin/certbot-3.11",
+		"/usr/local/bin/certbot-3.10",
+		"/usr/local/bin/certbot-3.9",
+		"/usr/bin/certbot",
+	}
+	for _, p := range candidates {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p
+		}
+	}
+	if p, err := exec.LookPath("certbot"); err == nil {
+		return p
+	}
+	return ""
+}
+
 // RequestLetEncryptSSL issues automated SSL certificate via certbot.
 func (m *SiteManager) RequestLetEncryptSSL(ctx context.Context, domain string) error {
 	site, err := m.GetSite(domain)
@@ -341,16 +362,32 @@ func (m *SiteManager) RequestLetEncryptSSL(ctx context.Context, domain string) e
 		webroot = filepath.Join("/usr/home", site.SystemUser, "public_html")
 	}
 
+	// Ensure home and document root permissions allow www access
+	homeDir := filepath.Join("/usr/home", site.SystemUser)
+	_, _ = m.exec.Execute(ctx, "/bin/chmod", "0755", homeDir)
+	_, _ = m.exec.Execute(ctx, "/bin/chmod", "0755", webroot)
+
 	// Ensure .well-known/acme-challenge exists with proper web server permissions
 	challengeDir := filepath.Join(webroot, ".well-known", "acme-challenge")
 	_ = os.MkdirAll(challengeDir, 0755)
 	_, _ = m.exec.Execute(ctx, "/usr/sbin/chown", "-R", fmt.Sprintf("%s:www", site.SystemUser), filepath.Join(webroot, ".well-known"))
 	_, _ = m.exec.Execute(ctx, "/bin/chmod", "-R", "0755", filepath.Join(webroot, ".well-known"))
 
-	// Ensure certbot package is installed
-	certbotPath := "/usr/local/bin/certbot"
-	if _, err := os.Stat(certbotPath); os.IsNotExist(err) {
-		_, _ = m.exec.Execute(ctx, "/usr/sbin/pkg", "install", "-y", "certbot")
+	// Ensure certbot binary is present; if missing, attempt automatic installation via FreeBSD pkg
+	certbotPath := findCertbotBinary()
+	if certbotPath == "" {
+		pkgCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		_, _ = m.exec.Execute(pkgCtx, "/usr/sbin/pkg", "install", "-y", "security/py-certbot")
+		certbotPath = findCertbotBinary()
+		if certbotPath == "" {
+			_, _ = m.exec.Execute(pkgCtx, "/usr/sbin/pkg", "install", "-y", "py311-certbot")
+			certbotPath = findCertbotBinary()
+		}
+	}
+
+	if certbotPath == "" {
+		return fmt.Errorf("Certbot belum terpasang di server FreeBSD.\nSilakan jalankan perintah ini di SSH:\npkg install -y security/py-certbot\nLalu klik kembali tombol 'Aktifkan SSL'.")
 	}
 
 	// Ensure port 80 acme-challenge route is loaded in Nginx
@@ -366,7 +403,7 @@ func (m *SiteManager) RequestLetEncryptSSL(ctx context.Context, domain string) e
 		"--non-interactive",
 		"--agree-tos",
 		"--register-unsafely-without-email",
-		"--force-renewal",
+		"--keep-until-expiring",
 	}
 
 	cmd := certbotPath
@@ -376,15 +413,20 @@ func (m *SiteManager) RequestLetEncryptSSL(ctx context.Context, domain string) e
 	}
 
 	res, err := m.exec.Execute(ctx, cmd, args...)
-	if err != nil || res.ExitCode != 0 {
-		out := res.Stderr
-		if out == "" {
-			out = res.Stdout
+	if err != nil || (res != nil && res.ExitCode != 0) {
+		out := ""
+		exitCode := -1
+		if res != nil {
+			exitCode = res.ExitCode
+			out = res.Stderr
+			if out == "" {
+				out = res.Stdout
+			}
 		}
 		if out == "" && err != nil {
 			out = err.Error()
 		}
-		return fmt.Errorf("Certbot error (Exit %d): %s", res.ExitCode, strings.TrimSpace(out))
+		return fmt.Errorf("Certbot gagal (Exit %d): %s", exitCode, strings.TrimSpace(out))
 	}
 
 	// Verify certificate was generated
