@@ -280,6 +280,36 @@ func (s *Server) handleAPISiteDelete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAPISiteSSL triggers Let's Encrypt automated SSL issuance and vhost configuration.
+func (s *Server) handleAPISiteSSL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Domain string `json:"domain"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Domain == "" {
+		http.Error(w, "domain is required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := s.siteMgr.RequestLetEncryptSSL(r.Context(), req.Domain); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Sertifikat SSL Let's Encrypt untuk %s berhasil diterbitkan dan diaktifkan!", req.Domain),
+	})
+}
+
 // handleAPIServices returns status or triggers service actions.
 func (s *Server) handleAPIServices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

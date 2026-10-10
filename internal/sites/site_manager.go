@@ -149,15 +149,58 @@ php_admin_value[upload_tmp_dir] = /tmp
 	return os.WriteFile(confFile, []byte(confContent), 0644)
 }
 
+// findSSLCertificate checks standard FreeBSD Let's Encrypt certificate paths.
+func findSSLCertificate(domain string) (string, string, bool) {
+	candidates := [][]string{
+		{
+			filepath.Join("/usr/local/etc/letsencrypt/live", domain, "fullchain.pem"),
+			filepath.Join("/usr/local/etc/letsencrypt/live", domain, "privkey.pem"),
+		},
+		{
+			filepath.Join("/etc/letsencrypt/live", domain, "fullchain.pem"),
+			filepath.Join("/etc/letsencrypt/live", domain, "privkey.pem"),
+		},
+	}
+	for _, pair := range candidates {
+		if _, err1 := os.Stat(pair[0]); err1 == nil {
+			if _, err2 := os.Stat(pair[1]); err2 == nil {
+				return pair[0], pair[1], true
+			}
+		}
+	}
+	return "", "", false
+}
+
 // generateVHostConfig generates Nginx vhost config in /usr/local/etc/nginx/conf.d/<domain>.conf
 func (m *SiteManager) generateVHostConfig(site *Site) error {
 	sockPath := fmt.Sprintf("unix:/var/run/php-fpm-%s.sock", site.SystemUser)
+	certFile, keyFile, hasSSL := findSSLCertificate(site.Domain)
 	var config string
 
 	if site.IsReverseProxy {
-		config = fmt.Sprintf(`server {
+		if site.SSLEnabled && hasSSL {
+			config = fmt.Sprintf(`server {
     listen 80;
     server_name %s www.%s;
+
+    location /.well-known/acme-challenge/ {
+        root %s;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name %s www.%s;
+
+    ssl_certificate %s;
+    ssl_certificate_key %s;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
     access_log /usr/home/%s/logs/access.log;
     error_log /usr/home/%s/logs/error.log;
@@ -170,13 +213,55 @@ func (m *SiteManager) generateVHostConfig(site *Site) error {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-`, site.Domain, site.Domain, site.SystemUser, site.SystemUser, site.ProxyUpstream)
-	} else {
-		config = fmt.Sprintf(`server {
+`, site.Domain, site.Domain, site.DocumentRoot, site.Domain, site.Domain, certFile, keyFile, site.SystemUser, site.SystemUser, site.ProxyUpstream)
+		} else {
+			config = fmt.Sprintf(`server {
     listen 80;
+    server_name %s www.%s;
+
+    location /.well-known/acme-challenge/ {
+        root %s;
+    }
+
+    access_log /usr/home/%s/logs/access.log;
+    error_log /usr/home/%s/logs/error.log;
+
+    location / {
+        proxy_pass %s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+`, site.Domain, site.Domain, site.DocumentRoot, site.SystemUser, site.SystemUser, site.ProxyUpstream)
+		}
+	} else {
+		if site.SSLEnabled && hasSSL {
+			config = fmt.Sprintf(`server {
+    listen 80;
+    server_name %s www.%s;
+
+    location /.well-known/acme-challenge/ {
+        root %s;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
     server_name %s www.%s;
     root %s;
     index index.php index.html index.htm;
+
+    ssl_certificate %s;
+    ssl_certificate_key %s;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
     access_log /usr/home/%s/logs/access.log;
     error_log /usr/home/%s/logs/error.log;
@@ -196,7 +281,38 @@ func (m *SiteManager) generateVHostConfig(site *Site) error {
         deny all;
     }
 }
-`, site.Domain, site.Domain, site.DocumentRoot, site.SystemUser, site.SystemUser, sockPath)
+`, site.Domain, site.Domain, site.DocumentRoot, site.Domain, site.Domain, site.DocumentRoot, certFile, keyFile, site.SystemUser, site.SystemUser, sockPath)
+		} else {
+			config = fmt.Sprintf(`server {
+    listen 80;
+    server_name %s www.%s;
+    root %s;
+    index index.php index.html index.htm;
+
+    location /.well-known/acme-challenge/ {
+        root %s;
+    }
+
+    access_log /usr/home/%s/logs/access.log;
+    error_log /usr/home/%s/logs/error.log;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass %s;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+`, site.Domain, site.Domain, site.DocumentRoot, site.DocumentRoot, site.SystemUser, site.SystemUser, sockPath)
+		}
 	}
 
 	_ = os.MkdirAll(m.vhostDir, 0755)
@@ -213,16 +329,78 @@ func (m *SiteManager) generateVHostConfig(site *Site) error {
 	return nil
 }
 
-// RequestLetEncryptSSL issues automated SSL certificate via certbot or acme.sh
+// RequestLetEncryptSSL issues automated SSL certificate via certbot.
 func (m *SiteManager) RequestLetEncryptSSL(ctx context.Context, domain string) error {
-	cmd := "/usr/local/bin/certbot"
-	args := []string{"certonly", "--webroot", "-w", filepath.Join("/usr/home", domain, "public_html"), "-d", domain, "--non-interactive", "--agree-tos", "-m", "admin@" + domain}
+	site, err := m.GetSite(domain)
+	if err != nil {
+		return fmt.Errorf("situs '%s' tidak ditemukan: %w", domain, err)
+	}
+
+	webroot := site.DocumentRoot
+	if webroot == "" {
+		webroot = filepath.Join("/usr/home", site.SystemUser, "public_html")
+	}
+
+	// Ensure .well-known/acme-challenge exists with proper web server permissions
+	challengeDir := filepath.Join(webroot, ".well-known", "acme-challenge")
+	_ = os.MkdirAll(challengeDir, 0755)
+	_, _ = m.exec.Execute(ctx, "/usr/sbin/chown", "-R", fmt.Sprintf("%s:www", site.SystemUser), filepath.Join(webroot, ".well-known"))
+	_, _ = m.exec.Execute(ctx, "/bin/chmod", "-R", "0755", filepath.Join(webroot, ".well-known"))
+
+	// Ensure certbot package is installed
+	certbotPath := "/usr/local/bin/certbot"
+	if _, err := os.Stat(certbotPath); os.IsNotExist(err) {
+		_, _ = m.exec.Execute(ctx, "/usr/sbin/pkg", "install", "-y", "certbot")
+	}
+
+	// Ensure port 80 acme-challenge route is loaded in Nginx
+	_ = m.generateVHostConfig(site)
+	_ = m.serviceMgr.Reload(ctx, site.WebServer)
+
+	// Execute certbot webroot
+	args := []string{
+		"certonly",
+		"--webroot",
+		"-w", webroot,
+		"-d", domain,
+		"--non-interactive",
+		"--agree-tos",
+		"--register-unsafely-without-email",
+		"--force-renewal",
+	}
+
+	cmd := certbotPath
 	if m.exec.UseDoas {
 		args = append([]string{cmd}, args...)
 		cmd = "/usr/local/bin/doas"
 	}
-	_, err := m.exec.Execute(ctx, cmd, args...)
-	return err
+
+	res, err := m.exec.Execute(ctx, cmd, args...)
+	if err != nil || res.ExitCode != 0 {
+		out := res.Stderr
+		if out == "" {
+			out = res.Stdout
+		}
+		if out == "" && err != nil {
+			out = err.Error()
+		}
+		return fmt.Errorf("Certbot error (Exit %d): %s", res.ExitCode, strings.TrimSpace(out))
+	}
+
+	// Verify certificate was generated
+	_, _, hasCert := findSSLCertificate(domain)
+	if !hasCert {
+		return fmt.Errorf("proses certbot selesai tetapi berkas sertifikat tidak ditemukan di /usr/local/etc/letsencrypt/live/%s/", domain)
+	}
+
+	// Mark SSL active, generate vhost with port 443 block, and reload Nginx
+	site.SSLEnabled = true
+	if err := m.generateVHostConfig(site); err != nil {
+		return fmt.Errorf("gagal mengupdate vhost ssl: %w", err)
+	}
+	_ = m.serviceMgr.Reload(ctx, site.WebServer)
+
+	return m.saveSiteRecord(site)
 }
 
 func (m *SiteManager) saveSiteRecord(site *Site) error {

@@ -141,6 +141,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/sites", s.handleAPISites)
 	mux.HandleFunc("/api/sites/update", s.handleAPISiteUpdate)
 	mux.HandleFunc("/api/sites/delete", s.handleAPISiteDelete)
+	mux.HandleFunc("/api/sites/ssl", s.handleAPISiteSSL)
 	mux.HandleFunc("/api/services", s.handleAPIServices)
 	mux.HandleFunc("/api/services/action", s.handleAPIServiceAction)
 	mux.HandleFunc("/api/services/install", s.handleAPIServiceInstall)

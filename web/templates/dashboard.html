@@ -122,11 +122,15 @@
               <td class="px-4 py-3 font-mono text-sky-400">PHP {{.PHPVersion}}</td>
               <td class="px-4 py-3">
                 {{if .SSLEnabled}}
-                  <span class="inline-flex items-center gap-1 text-emerald-400 font-medium">
-                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Let's Encrypt
-                  </span>
+                  <button type="button" onclick="handleIssueSSL('{{.Domain}}')" title="Klik untuk menerbitkan ulang / perbarui sertifikat SSL" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all text-xs font-medium cursor-pointer">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span>SSL Active</span>
+                  </button>
                 {{else}}
-                  <span class="text-slate-500">HTTP Only</span>
+                  <button type="button" onclick="handleIssueSSL('{{.Domain}}')" title="Klik untuk mengaktifkan SSL Let's Encrypt gratis" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-dark-900 hover:bg-sky-600/20 text-slate-300 hover:text-sky-300 border border-slate-700 hover:border-sky-500/40 transition-all text-xs font-medium cursor-pointer">
+                    <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Aktifkan SSL</span>
+                  </button>
                 {{end}}
               </td>
               <td class="px-4 py-3 text-right whitespace-nowrap">
@@ -405,6 +409,43 @@ async function handleEditSite(e) {
     }
   } catch (err) {
     alert('Network error: ' + err);
+  }
+}
+
+async function handleIssueSSL(domain) {
+  if (!confirm(`Aktifkan / Terbitkan sertifikat SSL Let's Encrypt gratis untuk domain:\n\n${domain}\n\nPastikan domain Anda sudah mengarah (DNS A record) ke IP VPS server ini.`)) {
+    return;
+  }
+
+  const btn = window.event ? window.event.currentTarget : null;
+  let originalContent = '';
+  if (btn) {
+    originalContent = btn.innerHTML;
+    btn.innerHTML = `<span class="animate-spin mr-1">⏳</span> Memproses SSL...`;
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await fetch('/api/sites/ssl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: domain })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`🎉 BERHASIL!\n\n${data.message || 'Sertifikat SSL Let\'s Encrypt berhasil diterbitkan!'}\n\nSitus sekarang aktif dengan HTTPS aman.`);
+      window.location.reload();
+    } else {
+      alert(`❌ GAGAL MENERBITKAN SSL:\n\n${data.error || 'Terjadi kesalahan saat memproses SSL.'}\n\nTips: Pastikan domain ${domain} sudah terhubung ke IP VPS dan port 80/443 tidak diblokir.`);
+    }
+  } catch (err) {
+    alert(`❌ Kesalahan jaringan: ${err}`);
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalContent;
+      btn.disabled = false;
+      if (window.renderLucideIcons) window.renderLucideIcons();
+    }
   }
 }
 </script>
