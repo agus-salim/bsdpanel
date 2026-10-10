@@ -113,6 +113,24 @@
         <div id="errorModalMessage" class="space-y-1 font-medium leading-relaxed whitespace-pre-line text-xs"></div>
       </div>
 
+      <!-- Quick Resolution Buttons (shown on conflict) -->
+      <div id="errorModalConflictActions" class="p-3.5 rounded-xl bg-dark-950 border border-sky-500/40 space-y-2.5 hidden">
+        <div class="flex items-center gap-2 text-xs font-semibold text-sky-400">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>Pilih Solusi Langsung (1-Click):</span>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button onclick="resolveWebServerConflict('switch', 'apache24', 'nginx')" class="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs transition-all cursor-pointer shadow-sm">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Hentikan Nginx & Jalankan Apache</span>
+          </button>
+          <button onclick="resolveWebServerConflict('alt_port', 'apache24', 'nginx', 8080)" class="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-dark-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 font-medium text-xs transition-all cursor-pointer">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            <span>Jalankan Apache di Port 8080</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Log / Details Box -->
       <div id="errorModalDetailsContainer" class="space-y-1.5 hidden">
         <div class="flex items-center justify-between">
@@ -133,6 +151,80 @@
     <div class="px-5 py-3.5 border-t border-slate-800 bg-dark-950/60 flex items-center justify-end gap-2.5">
       <button onclick="closeErrorModal()" class="px-4 py-2 rounded-lg bg-dark-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
         Tutup
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Dedicated Web Server Conflict & Switch Modal -->
+<div id="webServerConflictModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all">
+  <div class="bg-dark-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <!-- Header -->
+    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-dark-950/90">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 flex-shrink-0">
+          <i data-lucide="layers" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="conflictModalTitle" class="text-sm font-bold text-slate-100">Peralihan Web Server</h3>
+          <p id="conflictModalSubtitle" class="text-[11px] text-slate-400 font-mono mt-0.5">Konflik Port Default 80/443</p>
+        </div>
+      </div>
+      <button onclick="closeConflictModal()" class="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-5 space-y-4 overflow-y-auto">
+      <div class="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"></i>
+        <div id="conflictModalDesc" class="leading-relaxed">
+          Service <span class="font-bold text-white" id="conflictTargetName">Apache 2.4</span> tidak dapat mengikat port 80 karena <span class="font-bold text-white" id="conflictSourceName">Nginx</span> saat ini sedang aktif (Running). Silakan tentukan opsi yang Anda inginkan:
+        </div>
+      </div>
+
+      <!-- Option 1: Switch Web Server -->
+      <div class="p-4 rounded-xl bg-dark-950 border border-slate-800 hover:border-sky-500/50 transition-all space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+            <h4 class="text-xs font-bold text-slate-100">Opsi 1: Beralih Penuh (Rekomendasi)</h4>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/30 text-sky-300">Port 80/443</span>
+        </div>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Otomatis menghentikan <span id="conflictSourceOpt1" class="text-slate-300 font-medium">Nginx</span> dan langsung mengaktifkan <span id="conflictTargetOpt1" class="text-slate-300 font-medium">Apache 2.4</span> sebagai web server utama di server Anda.
+        </p>
+        <button id="btnSwitchWebServer" onclick="resolveWebServerConflict('switch')" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs shadow-md transition-all cursor-pointer">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          <span id="btnSwitchWebServerText">Hentikan Nginx & Jalankan Apache 2.4</span>
+        </button>
+      </div>
+
+      <!-- Option 2: Run Concurrently on Alt Port (Only for Apache) -->
+      <div id="conflictAltPortCard" class="p-4 rounded-xl bg-dark-950 border border-slate-800 hover:border-emerald-500/50 transition-all space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <h4 class="text-xs font-bold text-slate-100">Opsi 2: Jalankan Bersamaan</h4>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/30 text-emerald-300">Port 8080</span>
+        </div>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Nginx tetap aktif di port 80/443, sedangkan Apache 2.4 akan otomatis dikonfigurasi berjalan di port 8080 sehingga kedua web server aktif bersamaan.
+        </p>
+        <button id="btnAltPortWebServer" onclick="resolveWebServerConflict('alt_port')" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-dark-900 hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 font-medium text-xs transition-all cursor-pointer">
+          <i data-lucide="play" class="w-3.5 h-3.5"></i>
+          <span id="btnAltPortWebServerText">Jalankan Apache di Port 8080 (Berdampingan)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-5 py-3 border-t border-slate-800 bg-dark-950/60 flex items-center justify-end">
+      <button onclick="closeConflictModal()" class="px-4 py-1.5 rounded-lg bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition-all cursor-pointer">
+        Batal
       </button>
     </div>
   </div>
@@ -392,7 +484,102 @@ function setButtonsDisabled(disabled, currentBtn = null) {
   });
 }
 
-function showErrorModal(title, subtitle, message, details) {
+let currentConflictData = null;
+
+function openConflictModal(data) {
+  currentConflictData = data;
+  const targetName = data.target_name || data.target_service;
+  const sourceName = data.conflict_name || data.conflict_service;
+
+  document.getElementById('conflictTargetName').textContent = targetName;
+  document.getElementById('conflictSourceName').textContent = sourceName;
+  document.getElementById('conflictSourceOpt1').textContent = sourceName;
+  document.getElementById('conflictTargetOpt1').textContent = targetName;
+  document.getElementById('btnSwitchWebServerText').textContent = `Hentikan ${sourceName} & Jalankan ${targetName}`;
+
+  // Option 2 (port 8080) is available when Apache is involved
+  const isApache = (data.target_service === 'apache24' || data.target_service === 'apache');
+  const altPortCard = document.getElementById('conflictAltPortCard');
+  if (altPortCard) {
+    if (isApache) {
+      altPortCard.classList.remove('hidden');
+    } else {
+      altPortCard.classList.add('hidden');
+    }
+  }
+
+  const modal = document.getElementById('webServerConflictModal');
+  modal.classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function closeConflictModal() {
+  const modal = document.getElementById('webServerConflictModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function resolveWebServerConflict(mode, targetSvc = null, conflictSvc = null, port = 80) {
+  const target = targetSvc || currentConflictData?.target_service || 'apache24';
+  const conflict = conflictSvc || currentConflictData?.conflict_service || 'nginx';
+  const targetName = currentConflictData?.target_name || (target === 'apache24' ? 'Apache 2.4' : target);
+  const conflictName = currentConflictData?.conflict_name || (conflict === 'nginx' ? 'Nginx' : conflict);
+
+  closeConflictModal();
+  closeErrorModal();
+
+  if (mode === 'switch') {
+    showToast(`Sedang menghentikan ${conflictName} dan beralih ke ${targetName}...`, 'info');
+    try {
+      const res = await fetch('/api/services/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: target,
+          action: 'start',
+          switch_from: conflict,
+          port: 80
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.success) {
+        showToast(data.message || `Berhasil beralih ke ${targetName}! ${conflictName} telah dihentikan.`, 'success');
+      } else {
+        const errMsg = data?.error || `Gagal beralih ke ${targetName}`;
+        const errDetails = data?.details || '';
+        showErrorModal(`Gagal Beralih ke ${targetName}`, `Peralihan dari ${conflictName}`, errMsg, errDetails);
+      }
+    } catch (err) {
+      showToast(`Network error: ${err.message}`, 'error');
+    }
+  } else if (mode === 'alt_port') {
+    showToast(`Sedang mengkonfigurasi ${targetName} di port ${port}...`, 'info');
+    try {
+      const res = await fetch('/api/services/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: target,
+          action: 'start',
+          port: port
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.success) {
+        showToast(data.message || `${targetName} berhasil berjalan di port ${port} bersamaan dengan ${conflictName}!`, 'success');
+      } else {
+        const errMsg = data?.error || `Gagal menjalankan ${targetName} di port ${port}`;
+        const errDetails = data?.details || '';
+        showErrorModal(`Gagal Menjalankan ${targetName} di Port ${port}`, `Port Alternatif`, errMsg, errDetails);
+      }
+    } catch (err) {
+      showToast(`Network error: ${err.message}`, 'error');
+    }
+  }
+
+  await loadServices();
+}
+
+function showErrorModal(title, subtitle, message, details, conflictData = null) {
   document.getElementById('errorModalTitle').textContent = title || 'Terjadi Kesalahan';
   document.getElementById('errorModalSubtitle').textContent = subtitle || 'Diagnostik Sistem FreeBSD';
   document.getElementById('errorModalMessage').textContent = message || '';
@@ -404,6 +591,22 @@ function showErrorModal(title, subtitle, message, details) {
     detailsContainer.classList.remove('hidden');
   } else {
     detailsContainer.classList.add('hidden');
+  }
+
+  // Conflict Action Buttons inside error modal
+  const conflictActions = document.getElementById('errorModalConflictActions');
+  if (conflictActions) {
+    if (conflictData || (message && message.includes('Konflik Port'))) {
+      currentConflictData = conflictData || {
+        target_service: 'apache24',
+        conflict_service: 'nginx',
+        target_name: 'Apache 2.4',
+        conflict_name: 'Nginx'
+      };
+      conflictActions.classList.remove('hidden');
+    } else {
+      conflictActions.classList.add('hidden');
+    }
   }
 
   const modal = document.getElementById('serviceErrorModal');
@@ -461,7 +664,10 @@ async function executeServiceAction(btn, serviceName, action) {
     const data = await res.json().catch(() => null);
 
     if (res.ok && data && data.success) {
-      showToast(`Service '${serviceName}' berhasil di-${action}!`, 'success');
+      showToast(data.message || `Service '${serviceName}' berhasil di-${action}!`, 'success');
+      await loadServices();
+    } else if (data && data.is_conflict) {
+      openConflictModal(data);
       await loadServices();
     } else {
       const errMsg = (data && data.error) ? data.error : `Gagal melakukan ${action} pada '${serviceName}'.`;
@@ -471,7 +677,8 @@ async function executeServiceAction(btn, serviceName, action) {
         `Gagal ${actionTitles[action] || action} Service: ${serviceName}`,
         `FreeBSD rc.d Service Manager (${serviceName})`,
         errMsg,
-        errDetails
+        errDetails,
+        data
       );
       await loadServices();
     }

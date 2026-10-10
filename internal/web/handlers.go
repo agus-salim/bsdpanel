@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -589,6 +590,76 @@ func (s *Server) getServiceDiagnosticInfo(ctx context.Context, svc string) strin
 	return strings.TrimSpace(b.String())
 }
 
+// getApacheListenPort reads the active listen port from /usr/local/etc/apache24/httpd.conf
+func getApacheListenPort() int {
+	confPath := "/usr/local/etc/apache24/httpd.conf"
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		return 80
+	}
+	re := regexp.MustCompile(`(?m)^Listen\s+(\d+)`)
+	matches := re.FindStringSubmatch(string(data))
+	if len(matches) > 1 {
+		if p, err := strconv.Atoi(matches[1]); err == nil && p > 0 {
+			return p
+		}
+	}
+	return 80
+}
+
+// ensureApacheConfigReady prepares Apache configuration, Listen port, and ServerName.
+func (s *Server) ensureApacheConfigReady(ctx context.Context, port int) error {
+	confPath := "/usr/local/etc/apache24/httpd.conf"
+
+	// If httpd.conf doesn't exist, try copy from sample
+	if _, err := os.Stat(confPath); os.IsNotExist(err) {
+		samplePath := "/usr/local/etc/apache24/httpd.conf.sample"
+		if sampleData, sampleErr := os.ReadFile(samplePath); sampleErr == nil {
+			_ = os.WriteFile(confPath, sampleData, 0644)
+		}
+	}
+
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		return fmt.Errorf("gagal membaca %s: %w", confPath, err)
+	}
+
+	content := string(data)
+	modified := false
+
+	if port <= 0 {
+		port = 80
+	}
+
+	targetListen := fmt.Sprintf("Listen %d", port)
+	listenRegex := regexp.MustCompile(`(?m)^Listen\s+\d+`)
+	if listenRegex.MatchString(content) {
+		content = listenRegex.ReplaceAllString(content, targetListen)
+		modified = true
+	} else {
+		content = targetListen + "\n" + content
+		modified = true
+	}
+
+	// Ensure ServerName localhost:port to suppress AH00558 warning
+	targetServerName := fmt.Sprintf("ServerName localhost:%d", port)
+	serverNameRegex := regexp.MustCompile(`(?m)^ServerName\s+.*`)
+	if serverNameRegex.MatchString(content) {
+		content = serverNameRegex.ReplaceAllString(content, targetServerName)
+		modified = true
+	} else {
+		content += "\n" + targetServerName + "\n"
+		modified = true
+	}
+
+	if modified {
+		_ = os.WriteFile(confPath, []byte(content), 0644)
+	}
+
+	_ = s.serviceMgr.Enable(ctx, "apache24")
+	return nil
+}
+
 // handleAPIServiceAction starts, stops, or restarts a service with conflict checks and verification.
 func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -597,8 +668,10 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Service string `json:"service"`
-		Action  string `json:"action"` // start, stop, restart, reload, enable, disable
+		Service    string `json:"service"`
+		Action     string `json:"action"`      // start, stop, restart, reload, enable, disable
+		SwitchFrom string `json:"switch_from"` // optional: stop conflicting service first (e.g. "nginx")
+		Port       int    `json:"port"`        // optional: port override (e.g. 8080)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -630,7 +703,7 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 		svc = "mysql-server"
 	}
 
-	// 1. Web server conflict detection on start / restart
+	// 1. Web server mapping
 	webServers := map[string]string{
 		"nginx":         "Nginx",
 		"apache24":      "Apache 2.4",
@@ -638,22 +711,56 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 		"openlitespeed": "OpenLiteSpeed",
 	}
 
+	// If switch_from is specified, stop that service first
+	if req.SwitchFrom != "" {
+		switchReq := strings.TrimSpace(req.SwitchFrom)
+		if switchReq == "apache" {
+			switchReq = "apache24"
+		}
+		_ = s.serviceMgr.Stop(r.Context(), switchReq)
+		time.Sleep(600 * time.Millisecond)
+	}
+
+	// If service is Apache 2.4, ensure config and listen port
+	if svc == "apache24" && (req.Action == "start" || req.Action == "restart") {
+		targetPort := req.Port
+		if targetPort <= 0 {
+			targetPort = getApacheListenPort()
+		}
+		_ = s.ensureApacheConfigReady(r.Context(), targetPort)
+	}
+
+	// 2. Web server conflict detection on start / restart
 	if _, isWeb := webServers[svc]; isWeb && (req.Action == "start" || req.Action == "restart") {
-		for otherSvc, otherName := range webServers {
-			if otherSvc == svc {
-				continue
-			}
-			st, err := s.serviceMgr.Status(r.Context(), otherSvc)
-			if err == nil && st != nil && st.IsRunning {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusConflict)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"error":   fmt.Sprintf("Konflik Port 80/443: %s sedang berjalan", otherName),
-					"details": fmt.Sprintf("Service %s tidak dapat dijalankan karena %s saat ini sedang aktif (Running) dan mengikat port default web (80/443).\n\nLangkah Penyelesaian:\n1. Hentikan (Stop) %s terlebih dahulu melalui tombol 'Stop' pada baris %s di daftar service.\n2. Setelah %s berhenti (Stopped), klik tombol 'Start' kembali pada %s.",
-						webServers[svc], otherName, otherName, otherName, otherName, webServers[svc]),
-				})
-				return
+		// If Apache is running on an alternative port (e.g. 8080), it does not bind port 80
+		isAltPort := (svc == "apache24" && getApacheListenPort() != 80)
+		if !isAltPort {
+			for otherSvc, otherName := range webServers {
+				if otherSvc == svc || otherSvc == req.SwitchFrom {
+					continue
+				}
+				// If other service is Apache and it is running on alt port, no port 80 conflict
+				if otherSvc == "apache24" && getApacheListenPort() != 80 {
+					continue
+				}
+
+				st, err := s.serviceMgr.Status(r.Context(), otherSvc)
+				if err == nil && st != nil && st.IsRunning {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"success":          false,
+						"is_conflict":      true,
+						"conflict_service": otherSvc,
+						"conflict_name":    otherName,
+						"target_service":   svc,
+						"target_name":      webServers[svc],
+						"error":            fmt.Sprintf("Konflik Port 80/443: %s sedang berjalan", otherName),
+						"details": fmt.Sprintf("Service %s tidak dapat dijalankan karena %s saat ini sedang aktif (Running) dan mengikat port default web (80/443).\n\nSilakan pilih opsi beralih web server atau jalankan di port alternatif (8080).",
+							webServers[svc], otherName),
+					})
+					return
+				}
 			}
 		}
 	}
@@ -734,10 +841,25 @@ func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	msg := fmt.Sprintf("Service '%s' berhasil di-%s", svc, req.Action)
+	if req.SwitchFrom != "" {
+		fromName := webServers[req.SwitchFrom]
+		if fromName == "" {
+			fromName = req.SwitchFrom
+		}
+		toName := webServers[svc]
+		if toName == "" {
+			toName = svc
+		}
+		msg = fmt.Sprintf("Berhasil beralih ke %s! %s telah dihentikan.", toName, fromName)
+	} else if svc == "apache24" && getApacheListenPort() == 8080 && req.Action == "start" {
+		msg = "Apache 2.4 berhasil dijalankan di port 8080 berdampingan dengan Nginx!"
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": fmt.Sprintf("Service '%s' berhasil di-%s", svc, req.Action),
+		"message": msg,
 	})
 }
 
