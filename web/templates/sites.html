@@ -1,0 +1,189 @@
+{{template "layout" .}}
+
+{{define "content"}}
+<div class="space-y-6">
+  <!-- Top bar with New Site action -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-base font-bold text-slate-100">Websites & Virtual Hosts</h2>
+      <p class="text-xs text-slate-400 mt-0.5">Manage domain virtual hosts, isolated system users, and PHP-FPM pools</p>
+    </div>
+    <button onclick="document.getElementById('createSiteModal').classList.toggle('hidden')" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-sm">
+      <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+      <span>Create New Site</span>
+    </button>
+  </div>
+
+  <!-- Create Site Form / Modal Card -->
+  <div id="createSiteModal" class="bg-dark-950 border border-slate-800 rounded-xl p-5 shadow-lg">
+    <div class="border-b border-slate-800 pb-3 mb-4">
+      <h3 class="text-sm font-bold text-slate-200">Provision New Website</h3>
+      <p class="text-xs text-slate-500 mt-0.5">Automated creation of FreeBSD user, public_html directory, and web server configuration</p>
+    </div>
+
+    <form id="siteForm" onsubmit="handleCreateSite(event)" class="space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Domain Name</label>
+          <input type="text" id="domain" required placeholder="example.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">FreeBSD Isolated User (Optional)</label>
+          <input type="text" id="system_user" placeholder="Auto-generated (e.g. u_example)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Web Server</label>
+          <select id="web_server" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500">
+            <option value="nginx">Nginx (High Performance Reverse Proxy / Static)</option>
+            <option value="apache">Apache 2.4 (Full .htaccess support)</option>
+            <option value="caddy">Caddy (Automatic HTTPS / Modern)</option>
+            <option value="litespeed">LiteSpeed / OpenLiteSpeed</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">PHP Version</label>
+          <select id="php_version" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500">
+            <option value="8.3" selected>PHP 8.3 (Recommended Standard)</option>
+            <option value="8.4">PHP 8.4 (Latest)</option>
+            <option value="8.2">PHP 8.2 (LTS)</option>
+            <option value="8.5">PHP 8.5 (Upcoming / Experimental)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="is_reverse_proxy" onchange="toggleProxyField()" class="rounded bg-slate-900 border-slate-700 text-sky-600 focus:ring-0">
+          <label for="is_reverse_proxy" class="text-xs text-slate-300">Enable Reverse Proxy (for Node.js, Go, or Python apps)</label>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="ssl_enabled" class="rounded bg-slate-900 border-slate-700 text-sky-600 focus:ring-0">
+          <label for="ssl_enabled" class="text-xs text-slate-300">Generate Let's Encrypt SSL automatically</label>
+        </div>
+      </div>
+
+      <div id="proxyField" class="hidden">
+        <label class="block text-xs font-medium text-slate-300 mb-1">Reverse Proxy Upstream URL</label>
+        <input type="text" id="proxy_upstream" placeholder="http://127.0.0.1:3000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+        <button type="button" onclick="document.getElementById('createSiteModal').classList.add('hidden')" class="px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all">
+          Cancel
+        </button>
+        <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-sm">
+          Deploy Website
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Sites List -->
+  <div class="bg-dark-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800">
+      <h3 class="text-sm font-bold text-slate-200">Registered Domains</h3>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-dark-900 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
+          <tr>
+            <th class="px-4 py-3">Domain</th>
+            <th class="px-4 py-3">User & Home</th>
+            <th class="px-4 py-3">Server</th>
+            <th class="px-4 py-3">PHP</th>
+            <th class="px-4 py-3">SSL</th>
+            <th class="px-4 py-3 text-right">Tools</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+          {{if .Sites}}
+            {{range .Sites}}
+            <tr class="hover:bg-slate-900/50">
+              <td class="px-4 py-3 font-medium text-slate-200">
+                <a href="http://{{.Domain}}" target="_blank" class="hover:underline text-sky-400 font-semibold">
+                  {{.Domain}}
+                </a>
+              </td>
+              <td class="px-4 py-3 font-mono text-slate-400">
+                <div>User: <span class="text-slate-200">{{.SystemUser}}</span></div>
+                <div class="text-[11px] text-slate-500">{{.DocumentRoot}}</div>
+              </td>
+              <td class="px-4 py-3 uppercase font-semibold text-slate-400">{{.WebServer}}</td>
+              <td class="px-4 py-3 font-mono">PHP {{.PHPVersion}}</td>
+              <td class="px-4 py-3">
+                {{if .SSLEnabled}}
+                  <span class="text-emerald-400 font-medium">SSL Active</span>
+                {{else}}
+                  <span class="text-slate-500">None</span>
+                {{end}}
+              </td>
+              <td class="px-4 py-3 text-right space-x-2">
+                <a href="/terminal?path={{.DocumentRoot}}" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]">
+                  Files
+                </a>
+                <a href="/terminal?site={{.Domain}}" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]">
+                  Logs
+                </a>
+              </td>
+            </tr>
+            {{end}}
+          {{else}}
+            <tr>
+              <td colspan="6" class="px-4 py-6 text-center text-slate-500">
+                No sites configured yet.
+              </td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleProxyField() {
+  const isChecked = document.getElementById('is_reverse_proxy').checked;
+  const field = document.getElementById('proxyField');
+  if (isChecked) {
+    field.classList.remove('hidden');
+  } else {
+    field.classList.add('hidden');
+  }
+}
+
+async function handleCreateSite(e) {
+  e.preventDefault();
+  const payload = {
+    domain: document.getElementById('domain').value,
+    system_user: document.getElementById('system_user').value,
+    web_server: document.getElementById('web_server').value,
+    php_version: document.getElementById('php_version').value,
+    is_reverse_proxy: document.getElementById('is_reverse_proxy').checked,
+    proxy_upstream: document.getElementById('proxy_upstream').value,
+    ssl_enabled: document.getElementById('ssl_enabled').checked,
+  };
+
+  try {
+    const res = await fetch('/api/sites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert('Site created successfully with isolated user!');
+      window.location.reload();
+    } else {
+      const err = await res.text();
+      alert('Error creating site: ' + err);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  }
+}
+</script>
+{{end}}

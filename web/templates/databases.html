@@ -1,0 +1,82 @@
+{{template "layout" .}}
+
+{{define "content"}}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-base font-bold text-slate-100">Database Management</h2>
+      <p class="text-xs text-slate-400 mt-0.5">Manage MariaDB & PostgreSQL engines with user isolation</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/phpmyadmin" target="_blank" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5">
+        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        <span>phpMyAdmin</span>
+      </a>
+      <a href="/phppgadmin" target="_blank" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5">
+        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        <span>phpPgAdmin</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Create Database Card -->
+  <div class="bg-dark-950 border border-slate-800 rounded-xl p-5 shadow-sm">
+    <h3 class="text-sm font-bold text-slate-200 mb-1">Create New Database & User</h3>
+    <p class="text-xs text-slate-500 mb-4">Provision a dedicated database with restricted user access</p>
+
+    <form onsubmit="handleCreateDB(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Engine</label>
+        <select id="db_type" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500">
+          <option value="mariadb">MariaDB (MySQL)</option>
+          <option value="postgresql">PostgreSQL</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Database Name</label>
+        <input type="text" id="db_name" required placeholder="app_db" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Database Username</label>
+        <input type="text" id="db_user" required placeholder="app_user" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+        <div class="flex gap-2">
+          <input type="password" id="db_password" required placeholder="Strong Password" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+          <button type="submit" class="px-3 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white whitespace-nowrap">Create</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+async function handleCreateDB(e) {
+  e.preventDefault();
+  const payload = {
+    type: document.getElementById('db_type').value,
+    database: document.getElementById('db_name').value,
+    user: document.getElementById('db_user').value,
+    password: document.getElementById('db_password').value
+  };
+
+  try {
+    const res = await fetch('/api/databases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert(`Database ${payload.database} and user ${payload.user} created successfully!`);
+      e.target.reset();
+    } else {
+      const err = await res.text();
+      alert(`Failed to create database: ${err}`);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  }
+}
+</script>
+{{end}}

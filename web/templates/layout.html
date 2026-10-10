@@ -1,0 +1,101 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}} - BSD Panel</title>
+  <!-- Local Tailwind CSS -->
+  <link rel="stylesheet" href="/static/css/tailwind.min.css">
+  <!-- Local Fira Sans Font -->
+  <link rel="stylesheet" href="/static/css/fira-sans.css">
+</head>
+<body class="bg-dark-900 text-slate-100 flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-dark-950 border-r border-slate-800 flex flex-col flex-shrink-0">
+    <!-- Brand / Header -->
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-sky-600 flex items-center justify-center text-white shadow-sm font-bold text-sm">
+          BSD
+        </div>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight text-white leading-tight">BSD Panel</h1>
+          <span class="text-xs text-sky-400 font-mono">FreeBSD Lightweight</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Menu -->
+    <nav class="flex-1 p-3 space-y-1">
+      <a href="/" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {{if eq .ActiveNav "dashboard"}}bg-sky-600/10 text-sky-400 border border-sky-500/30{{else}}text-slate-400 hover:text-slate-200 hover:bg-slate-800{{end}}">
+        <i data-lucide="server" class="w-4 h-4"></i>
+        <span>Dashboard</span>
+      </a>
+
+      <a href="/sites" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {{if eq .ActiveNav "sites"}}bg-sky-600/10 text-sky-400 border border-sky-500/30{{else}}text-slate-400 hover:text-slate-200 hover:bg-slate-800{{end}}">
+        <i data-lucide="globe" class="w-4 h-4"></i>
+        <span>Websites & VHosts</span>
+      </a>
+
+      <a href="/services" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {{if eq .ActiveNav "services"}}bg-sky-600/10 text-sky-400 border border-sky-500/30{{else}}text-slate-400 hover:text-slate-200 hover:bg-slate-800{{end}}">
+        <i data-lucide="layers" class="w-4 h-4"></i>
+        <span>Services & Stack</span>
+      </a>
+
+      <a href="/databases" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {{if eq .ActiveNav "databases"}}bg-sky-600/10 text-sky-400 border border-sky-500/30{{else}}text-slate-400 hover:text-slate-200 hover:bg-slate-800{{end}}">
+        <i data-lucide="database" class="w-4 h-4"></i>
+        <span>Databases</span>
+      </a>
+
+      <a href="/firewall" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {{if eq .ActiveNav "firewall"}}bg-sky-600/10 text-sky-400 border border-sky-500/30{{else}}text-slate-400 hover:text-slate-200 hover:bg-slate-800{{end}}">
+        <i data-lucide="shield" class="w-4 h-4"></i>
+        <span>PF Firewall & Fail2ban</span>
+      </a>
+
+      <a href="/terminal" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {{if eq .ActiveNav "terminal"}}bg-sky-600/10 text-sky-400 border border-sky-500/30{{else}}text-slate-400 hover:text-slate-200 hover:bg-slate-800{{end}}">
+        <i data-lucide="terminal" class="w-4 h-4"></i>
+        <span>Terminal & Logs</span>
+      </a>
+    </nav>
+
+    <!-- Footer Isolation Info -->
+    <div class="p-3 border-t border-slate-800 text-xs text-slate-500">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="font-medium text-slate-400">User Isolation: Active</span>
+      </div>
+      <p class="font-mono text-[11px] text-slate-600">Non-Root FreeBSD Daemons</p>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <div class="flex-1 flex flex-col min-h-screen overflow-y-auto">
+    <!-- Top Bar -->
+    <header class="h-14 border-b border-slate-800 bg-dark-950/80 px-6 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-semibold text-slate-200">{{.Title}}</span>
+      </div>
+
+      <div class="flex items-center gap-4 text-xs">
+        <div class="flex items-center gap-2 px-2.5 py-1 rounded bg-slate-800/60 border border-slate-700/50">
+          <i data-lucide="lock" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span class="text-slate-300 font-mono">Nginx Reverse Proxy</span>
+        </div>
+        <div class="text-slate-400">
+          Domain: <span class="text-sky-400 font-mono font-medium">{{.PanelDomain}}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Body Page Content -->
+    <main class="flex-1 p-6">
+      {{template "content" .}}
+    </main>
+  </div>
+
+  <!-- Local Offline Lucide Icons Hydrator -->
+  <script src="/static/js/lucide-offline.js"></script>
+</body>
+</html>
+{{end}}

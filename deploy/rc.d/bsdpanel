@@ -1,0 +1,37 @@
+#!/bin/sh
+#
+# PROVIDE: bsdpanel
+# REQUIRE: DAEMON NETWORKING
+# KEYWORD: shutdown
+#
+# Add the following line to /etc/rc.conf to enable bsdpanel:
+# bsdpanel_enable="YES"
+
+. /etc/rc.subr
+
+name="bsdpanel"
+rcvar="bsdpanel_enable"
+
+load_rc_config $name
+
+: ${bsdpanel_enable:="NO"}
+: ${bsdpanel_user:="bsdpanel"}
+: ${bsdpanel_group:="bsdpanel"}
+: ${bsdpanel_config:="/usr/local/etc/bsdpanel.json"}
+
+command="/usr/local/bin/bsdpanel"
+command_args="-config ${bsdpanel_config} > /var/log/bsdpanel.log 2>&1 &"
+
+start_precmd="bsdpanel_prestart"
+
+bsdpanel_prestart()
+{
+    if [ ! -f "${bsdpanel_config}" ]; then
+        echo "Creating default configuration at ${bsdpanel_config}..."
+        mkdir -p /usr/local/etc
+        mkdir -p /var/db/bsdpanel
+        chown -R ${bsdpanel_user}:${bsdpanel_group} /var/db/bsdpanel
+    fi
+}
+
+run_rc_command "$1"

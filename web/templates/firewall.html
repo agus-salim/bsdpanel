@@ -1,0 +1,76 @@
+{{template "layout" .}}
+
+{{define "content"}}
+<div class="space-y-6">
+  <div>
+    <h2 class="text-base font-bold text-slate-100">Firewall (PF) & Intrusion Prevention (Fail2ban)</h2>
+    <p class="text-xs text-slate-400 mt-0.5">Manage FreeBSD Packet Filter (pfctl) and brute-force prevention</p>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- FreeBSD PF Card -->
+    <div class="bg-dark-950 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <i data-lucide="shield" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">FreeBSD PF (Packet Filter)</h3>
+            <span class="text-xs text-slate-500 font-mono">/etc/pf.conf</span>
+          </div>
+        </div>
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          Enabled
+        </span>
+      </div>
+
+      <p class="text-xs text-slate-400">
+        PF protects your FreeBSD VPS from synflood attacks, port scans, and limits maximum connections per source IP.
+      </p>
+
+      <div class="space-y-2">
+        <div class="text-xs font-semibold text-slate-300">Active Port Ingress Rules:</div>
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between">
+            <span>Port 80 (HTTP)</span>
+            <span class="text-emerald-400">PASS</span>
+          </div>
+          <div class="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between">
+            <span>Port 443 (HTTPS)</span>
+            <span class="text-emerald-400">PASS</span>
+          </div>
+          <div class="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between">
+            <span>Port 22 (SSH)</span>
+            <span class="text-emerald-400">PASS</span>
+          </div>
+          <div class="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between">
+            <span>Port 8880 (Panel)</span>
+            <span class="text-sky-400">PROXY ONLY</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fail2ban Status Card -->
+    <div class="bg-dark-950 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-lg bg-sky-500/10 text-sky-400">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">Fail2ban Intrusion Defense</h3>
+            <span class="text-xs text-slate-500 font-mono">fail2ban-client</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-[11px] text-slate-300 overflow-x-auto whitespace-pre">
+{{if .Fail2ban}}{{.Fail2ban}}{{else}}Jail list: sshd, nginx-botsearch, nginx-limit-req
+Status: Monitoring active. Zero IP bans currently in effect.{{end}}
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

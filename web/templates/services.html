@@ -1,0 +1,152 @@
+{{template "layout" .}}
+
+{{define "content"}}
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h2 class="text-base font-bold text-slate-100">Service Manager & Package Installer</h2>
+    <p class="text-xs text-slate-400 mt-0.5">Control FreeBSD daemons (rc.d) and install software stacks via FreeBSD pkg</p>
+  </div>
+
+  <!-- Web Servers Management Section -->
+  <div class="bg-dark-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-bold text-slate-200">Web Servers Stack</h3>
+        <p class="text-xs text-slate-500">Select and run your preferred web servers simultaneously</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
+      <!-- Nginx -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-bold text-slate-200">Nginx</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
+          </div>
+          <p class="text-xs text-slate-400">Reverse proxy & static web server</p>
+        </div>
+        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800">
+          <button onclick="controlService('nginx', 'restart')" class="flex-1 px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200">Restart</button>
+          <button onclick="controlService('nginx', 'reload')" class="flex-1 px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200">Reload</button>
+        </div>
+      </div>
+
+      <!-- Apache -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-bold text-slate-200">Apache 2.4</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400">Installed</span>
+          </div>
+          <p class="text-xs text-slate-400">Standard web server with mod_rewrite</p>
+        </div>
+        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800">
+          <button onclick="controlService('apache24', 'start')" class="flex-1 px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200">Start</button>
+          <button onclick="controlService('apache24', 'stop')" class="flex-1 px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200">Stop</button>
+        </div>
+      </div>
+
+      <!-- Caddy -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-bold text-slate-200">Caddy Server</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400">Optional</span>
+          </div>
+          <p class="text-xs text-slate-400">Automatic HTTPS and zero-config TLS</p>
+        </div>
+        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800">
+          <button onclick="controlService('caddy', 'start')" class="flex-1 px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white">Enable</button>
+        </div>
+      </div>
+
+      <!-- OpenLiteSpeed -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-bold text-slate-200">LiteSpeed</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400">Optional</span>
+          </div>
+          <p class="text-xs text-slate-400">Event-driven, high performance cache</p>
+        </div>
+        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800">
+          <button onclick="controlService('openlitespeed', 'start')" class="flex-1 px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white">Enable</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Version PHP Engine Section -->
+  <div class="bg-dark-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-slate-800">
+      <h3 class="text-sm font-bold text-slate-200">Multi-Version PHP Engines (FreeBSD Ports/Pkg)</h3>
+      <p class="text-xs text-slate-500">Each site uses an isolated PHP-FPM pool matched to its chosen version</p>
+    </div>
+
+    <div class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- PHP 8.2 -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-slate-200 font-mono">PHP 8.2</span>
+          <span class="text-[10px] text-slate-400 font-mono">FPM Pool: OK</span>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Exts: mysqli, pgsql, curl, gd, mbstring</p>
+        <button onclick="controlService('php82-fpm', 'restart')" class="w-full px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Restart FPM</button>
+      </div>
+
+      <!-- PHP 8.3 -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-slate-200 font-mono">PHP 8.3 (Default)</span>
+          <span class="text-[10px] text-emerald-400 font-mono">Running</span>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Exts: mysqli, pgsql, curl, gd, zip, intl</p>
+        <button onclick="controlService('php83-fpm', 'restart')" class="w-full px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Restart FPM</button>
+      </div>
+
+      <!-- PHP 8.4 -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-slate-200 font-mono">PHP 8.4</span>
+          <span class="text-[10px] text-emerald-400 font-mono">Running</span>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Exts: mysqli, pgsql, curl, gd, opcache</p>
+        <button onclick="controlService('php84-fpm', 'restart')" class="w-full px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Restart FPM</button>
+      </div>
+
+      <!-- PHP 8.5 -->
+      <div class="bg-dark-900 border border-slate-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-slate-200 font-mono">PHP 8.5 (Preview)</span>
+          <span class="text-[10px] text-amber-400 font-mono">Available</span>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Experimental builds from FreeBSD Ports</p>
+        <button onclick="controlService('php85-fpm', 'restart')" class="w-full px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Restart FPM</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function controlService(service, action) {
+  try {
+    const res = await fetch('/api/services/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service, action })
+    });
+    if (res.ok) {
+      alert(`Service ${service} action '${action}' completed!`);
+      window.location.reload();
+    } else {
+      const err = await res.text();
+      alert(`Action failed: ${err}`);
+    }
+  } catch (e) {
+    alert('Network error: ' + e);
+  }
+}
+</script>
+{{end}}
