@@ -1462,6 +1462,21 @@ func (s *Server) handleAPIFilesRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if info.IsDir() {
+		http.Error(w, "folder tidak dapat dibuka sebagai file teks", http.StatusBadRequest)
+		return
+	}
+	// Limit text editing to files under 10MB to avoid crashing browser
+	if info.Size() > 10*1024*1024 {
+		http.Error(w, fmt.Sprintf("file terlalu besar untuk diedit langsung di web editor (%s). Batas maksimal 10 MB.", formatFileSize(info.Size())), http.StatusBadRequest)
+		return
+	}
+
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1493,8 +1508,14 @@ func (s *Server) handleAPIFilesSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetPath := filepath.Clean(req.Path)
-	if err := os.WriteFile(targetPath, []byte(req.Content), 0644); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// Preserve existing permissions if file already exists
+	perm := os.FileMode(0644)
+	if fi, err := os.Stat(targetPath); err == nil {
+		perm = fi.Mode().Perm()
+	}
+
+	if err := os.WriteFile(targetPath, []byte(req.Content), perm); err != nil {
+		http.Error(w, fmt.Sprintf("gagal menyimpan file: %v", err), http.StatusInternalServerError)
 		return
 	}
 

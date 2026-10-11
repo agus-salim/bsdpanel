@@ -352,30 +352,65 @@
   </div>
 </div>
 
-<!-- Built-in Code Editor Modal -->
-<div id="editorModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.75);">
-  <div class="w-full max-w-5xl bg-dark-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden animate-fadeIn">
+<!-- Built-in Code & Text Editor Modal -->
+<div id="editorModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style="background-color: rgba(5, 8, 15, 0.88); backdrop-filter: blur(4px);">
+  <div id="editorModalContainer" class="w-full border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fadeIn" style="height: 88vh; max-height: 92vh; width: 95%; max-width: 1250px; background-color: #0d1117;">
     <!-- Editor Header -->
-    <div class="p-3.5 bg-dark-950 border-b border-slate-800 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <i data-lucide="edit" class="w-4 h-4 text-sky-400"></i>
-        <span id="editorFilePath" class="text-xs font-mono font-medium text-slate-200"></span>
+    <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between flex-shrink-0" style="background-color: #080c14;">
+      <div class="flex items-center gap-2.5 min-w-0 pr-3">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center text-sky-400 bg-sky-500/15 flex-shrink-0">
+          <i data-lucide="file-code" class="w-4 h-4"></i>
+        </div>
+        <div class="flex items-center gap-2 truncate">
+          <span id="editorFilePath" class="text-xs font-mono font-medium text-slate-200 truncate select-all"></span>
+          <span id="editorDirtyBadge" class="hidden px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex-shrink-0 animate-pulse">● Unsaved</span>
+        </div>
       </div>
-      <div class="flex items-center gap-2">
-        <span id="editorStatus" class="text-xs font-mono text-slate-400"></span>
-        <button onclick="saveCurrentFile()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-sm cursor-pointer">
-          <i data-lucide="save" class="w-3.5 h-3.5"></i>
-          <span>Save File</span>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <!-- Word wrap toggle -->
+        <button type="button" id="editorWrapBtn" onclick="toggleEditorWrap()" title="Toggle Word Wrap" class="px-2.5 py-1.5 rounded-lg text-xs font-mono text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 transition-all cursor-pointer">
+          Wrap: <span id="editorWrapStatus" class="text-sky-400 font-semibold">Off</span>
         </button>
-        <button onclick="closeEditor()" class="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-100 bg-dark-900 hover:bg-slate-800 border border-slate-700 transition-all cursor-pointer">
+        <!-- Fullscreen toggle -->
+        <button type="button" id="editorFullscreenBtn" onclick="toggleEditorFullscreen()" title="Toggle Fullscreen" class="p-1.5 rounded-lg text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 transition-all cursor-pointer">
+          <i data-lucide="maximize" class="w-4 h-4" id="editorFullscreenIcon"></i>
+        </button>
+        <!-- Save button -->
+        <button type="button" id="editorSaveBtn" onclick="saveCurrentFile()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-sm cursor-pointer">
+          <i data-lucide="save" class="w-3.5 h-3.5" id="editorSaveIcon"></i>
+          <span>Save File</span>
+          <span class="text-[10px] px-1 py-0.2 rounded bg-sky-700 text-sky-100 font-mono hidden sm:inline">Ctrl+S</span>
+        </button>
+        <!-- Close button -->
+        <button type="button" onclick="closeEditor()" class="px-2.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 transition-all cursor-pointer">
           Close
         </button>
       </div>
     </div>
 
-    <!-- Code Editor Body -->
-    <div class="flex-1 bg-dark-950 p-2 overflow-hidden flex flex-col">
-      <textarea id="editorTextarea" spellcheck="false" class="w-full flex-1 bg-dark-950 text-slate-100 font-mono text-xs p-4 resize-none border-0 focus:outline-none leading-relaxed"></textarea>
+    <!-- Code Editor Body (Line Numbers Gutter + Monospace Textarea) -->
+    <div class="flex-1 min-h-0 flex relative overflow-hidden" style="background-color: #0b0f19;">
+      <!-- Line Numbers Gutter -->
+      <div id="editorLineNumbers" class="select-none text-right font-mono py-3 px-2.5 text-slate-500 border-r border-slate-800/80 overflow-hidden flex-shrink-0" style="background-color: #080c14; width: 48px; line-height: 20px; font-size: 12px; white-space: pre;">1</div>
+      <!-- Editor Textarea -->
+      <textarea id="editorTextarea" spellcheck="false" placeholder="Write or paste your code here..." style="flex: 1; min-height: 100%; width: 100%; height: 100%; outline: none; border: none; resize: none; background-color: #0b0f19; color: #f1f5f9; font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 12.5px; line-height: 20px; padding: 12px 14px; tab-size: 4; -moz-tab-size: 4; white-space: pre; overflow: auto;"></textarea>
+    </div>
+
+    <!-- Editor Status Bar Footer -->
+    <div class="px-4 py-2 border-t border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-400 flex-shrink-0" style="background-color: #080c14;">
+      <div class="flex items-center gap-3">
+        <span id="editorCursorPos" class="text-slate-300">Ln 1, Col 1</span>
+        <span class="text-slate-600">•</span>
+        <span id="editorLinesCount" class="text-slate-300">1 lines</span>
+        <span class="text-slate-600">•</span>
+        <span id="editorFileSize" class="text-slate-300">0 B</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="editorSaveStatus" class="font-medium text-slate-300"></span>
+        <span class="text-slate-500">UTF-8</span>
+        <span class="text-slate-700 hidden sm:inline">|</span>
+        <span class="hidden sm:inline text-slate-500">Ctrl+S to save, Esc to exit</span>
+      </div>
     </div>
   </div>
 </div>
@@ -393,18 +428,17 @@ let currentSort = { field: 'name', asc: true };
 document.addEventListener('DOMContentLoaded', () => {
   loadDirectory(currentPath);
   setupDragAndDrop();
+  initEditorEvents();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      closeAllModals();
-    }
-    // Ctrl+S / Cmd+S in editor
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      if (!document.getElementById('editorModal').classList.contains('hidden')) {
-        e.preventDefault();
-        saveCurrentFile();
+      const editorModal = document.getElementById('editorModal');
+      if (editorModal && !editorModal.classList.contains('hidden')) {
+        closeEditor();
+        return;
       }
+      closeAllModals();
     }
   });
 });
@@ -703,7 +737,7 @@ function renderItems(items) {
     } else if (item.is_archive) {
       iconName = 'archive';
       iconColor = 'text-purple-400';
-    } else if (isCodeExt(item.ext)) {
+    } else if (isCodeExt(item.ext, item.name)) {
       iconName = 'file-code';
       iconColor = 'text-sky-400';
     } else if (isImageExt(item.ext)) {
@@ -716,7 +750,7 @@ function renderItems(items) {
         <input type="checkbox" onchange="toggleItemSelect('${escapePath(item.path)}', this.checked)" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-slate-700 bg-dark-950 text-sky-500 focus:ring-0 cursor-pointer">
       </td>
       <td class="px-4 py-2.5 font-medium text-slate-100">
-        <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="${item.is_dir ? `loadDirectory('${escapePath(item.path)}')` : (item.is_archive ? `openExtractModal('${escapePath(item.path)}')` : `openEditor('${escapePath(item.path)}')`)}">
+        <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="${item.is_dir ? `loadDirectory('${escapePath(item.path)}')` : (item.is_archive ? `openExtractModal('${escapePath(item.path)}')` : (isCodeExt(item.ext, item.name) ? `openEditor('${escapePath(item.path)}')` : `window.location.href='/api/files/download?path=${encodeURIComponent(item.path)}'`))}">
           <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor} flex-shrink-0"></i>
           <span class="hover:text-sky-400 transition-all font-mono text-[12px] truncate max-w-md">${item.name}</span>
           ${item.is_archive ? `<span class="px-1.5 py-0.5 rounded bg-purple-950 border border-purple-500/50 text-[10px] text-purple-300 font-mono font-semibold">ARCHIVE</span>` : ''}
@@ -743,7 +777,7 @@ function renderItems(items) {
             Archive
           </button>
         ` : `
-          ${isCodeExt(item.ext) ? `
+          ${isCodeExt(item.ext, item.name) ? `
             <button onclick="openEditor('${escapePath(item.path)}')" class="px-2.5 py-1 rounded bg-dark-900 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-[11px] font-medium border border-slate-700 transition-all cursor-pointer">
               Edit
             </button>
@@ -777,9 +811,24 @@ function escapePath(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-function isCodeExt(ext) {
-  const codeExts = ['.php', '.html', '.htm', '.css', '.js', '.ts', '.json', '.txt', '.conf', '.env', '.sh', '.xml', '.yml', '.yaml', '.sql', '.htaccess', '.py', '.md'];
-  return codeExts.includes(ext);
+function isCodeExt(ext, name = '') {
+  const codeExts = [
+    '.php', '.html', '.htm', '.css', '.scss', '.sass', '.less',
+    '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx',
+    '.json', '.txt', '.conf', '.config', '.cnf', '.env',
+    '.sh', '.bash', '.zsh', '.csh', '.fish',
+    '.xml', '.yml', '.yaml', '.sql', '.htaccess', '.htpasswd',
+    '.py', '.md', '.markdown', '.ini', '.cfg', '.log',
+    '.toml', '.go', '.c', '.h', '.cpp', '.hpp', '.rs', '.rb',
+    '.pl', '.cgi', '.csv', '.tsv', '.lock', '.properties',
+    '.gitignore', '.gitattributes', '.dockerignore', '.svg'
+  ];
+  if (ext && codeExts.includes(ext.toLowerCase())) return true;
+  const lowerName = (name || '').toLowerCase();
+  const knownFilenames = ['dockerfile', 'makefile', 'license', 'readme', 'hosts', 'gemfile', 'procfile', '.env', '.gitignore', '.gitattributes', '.dockerignore'];
+  if (knownFilenames.includes(lowerName)) return true;
+  if (!ext && name && !isImageExt(ext)) return true;
+  return false;
 }
 
 function isImageExt(ext) {
@@ -1187,44 +1236,247 @@ async function uploadFilesList(files) {
 }
 
 // ==========================================
-// CODE EDITOR CONTROLLER
+// CODE & TEXT EDITOR CONTROLLER
 // ==========================================
 
 let editingFilePath = '';
+let initialEditorContent = '';
+let isEditorDirty = false;
+let isEditorFullscreen = false;
+let isEditorWrap = false;
+
+function initEditorEvents() {
+  const textarea = document.getElementById('editorTextarea');
+  const lineNumbers = document.getElementById('editorLineNumbers');
+  if (!textarea || !lineNumbers) return;
+
+  // Sync scroll between textarea and line numbers
+  textarea.addEventListener('scroll', () => {
+    lineNumbers.scrollTop = textarea.scrollTop;
+  });
+
+  // Track input for line numbers, dirty status, stats
+  textarea.addEventListener('input', () => {
+    updateEditorStats();
+  });
+
+  // Track cursor position on click & arrow keys
+  textarea.addEventListener('click', updateCursorPos);
+  textarea.addEventListener('keyup', updateCursorPos);
+
+  // Tab key, auto-indent, and keyboard shortcuts
+  textarea.addEventListener('keydown', (e) => {
+    // Ctrl+S or Cmd+S to save
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveCurrentFile();
+      return;
+    }
+
+    // Tab key indent/outdent
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = textarea.value;
+
+      if (e.shiftKey) {
+        // Shift+Tab: Outdent current line
+        const before = val.substring(0, start);
+        const lastNewline = before.lastIndexOf('\n');
+        const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
+        const linePrefix = val.substring(lineStart, lineStart + 4);
+        const spacesToRemove = linePrefix.match(/^ +/);
+        if (spacesToRemove && spacesToRemove[0].length > 0) {
+          const count = Math.min(spacesToRemove[0].length, 2);
+          textarea.value = val.substring(0, lineStart) + val.substring(lineStart + count);
+          textarea.selectionStart = textarea.selectionEnd = Math.max(lineStart, start - count);
+          updateEditorStats();
+        }
+      } else {
+        // Tab: Insert 2 spaces
+        const spaces = '  ';
+        textarea.value = val.substring(0, start) + spaces + val.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + spaces.length;
+        updateEditorStats();
+      }
+      return;
+    }
+
+    // Enter key auto-indent
+    if (e.key === 'Enter') {
+      const start = textarea.selectionStart;
+      const val = textarea.value;
+      const before = val.substring(0, start);
+      const lastNewline = before.lastIndexOf('\n');
+      const currentLine = lastNewline === -1 ? before : before.substring(lastNewline + 1);
+      const match = currentLine.match(/^(\s+)/);
+      if (match) {
+        e.preventDefault();
+        const indent = match[1];
+        textarea.value = val.substring(0, start) + '\n' + indent + val.substring(start);
+        textarea.selectionStart = textarea.selectionEnd = start + 1 + indent.length;
+        updateEditorStats();
+      }
+    }
+  });
+}
+
+function updateEditorStats() {
+  const textarea = document.getElementById('editorTextarea');
+  const lineNumbers = document.getElementById('editorLineNumbers');
+  const linesCountEl = document.getElementById('editorLinesCount');
+  const dirtyBadge = document.getElementById('editorDirtyBadge');
+  const sizeEl = document.getElementById('editorFileSize');
+
+  const val = textarea.value;
+  const lines = val.split('\n');
+  const count = lines.length;
+
+  // Build line numbers
+  let nums = '';
+  for (let i = 1; i <= count; i++) {
+    nums += i + '\n';
+  }
+  lineNumbers.innerText = nums;
+  lineNumbers.style.width = (Math.max(3, String(count).length) * 9 + 20) + 'px';
+
+  if (linesCountEl) linesCountEl.textContent = `${count} line${count > 1 ? 's' : ''}`;
+  if (sizeEl) sizeEl.textContent = formatSize(new Blob([val]).size);
+
+  // Dirty check
+  isEditorDirty = (val !== initialEditorContent);
+  if (dirtyBadge) {
+    if (isEditorDirty) {
+      dirtyBadge.classList.remove('hidden');
+    } else {
+      dirtyBadge.classList.add('hidden');
+    }
+  }
+
+  updateCursorPos();
+}
+
+function updateCursorPos() {
+  const textarea = document.getElementById('editorTextarea');
+  const posEl = document.getElementById('editorCursorPos');
+  if (!textarea || !posEl) return;
+
+  const pos = textarea.selectionStart || 0;
+  const lines = textarea.value.substring(0, pos).split('\n');
+  const lineNum = lines.length;
+  const colNum = lines[lines.length - 1].length + 1;
+  posEl.textContent = `Ln ${lineNum}, Col ${colNum}`;
+}
+
+function toggleEditorWrap() {
+  isEditorWrap = !isEditorWrap;
+  const textarea = document.getElementById('editorTextarea');
+  const statusEl = document.getElementById('editorWrapStatus');
+  if (isEditorWrap) {
+    textarea.style.whiteSpace = 'pre-wrap';
+    textarea.style.wordBreak = 'break-word';
+    if (statusEl) statusEl.textContent = 'On';
+  } else {
+    textarea.style.whiteSpace = 'pre';
+    textarea.style.wordBreak = 'normal';
+    if (statusEl) statusEl.textContent = 'Off';
+  }
+}
+
+function toggleEditorFullscreen() {
+  isEditorFullscreen = !isEditorFullscreen;
+  const modal = document.getElementById('editorModal');
+  const container = document.getElementById('editorModalContainer');
+  const icon = document.getElementById('editorFullscreenIcon');
+
+  if (isEditorFullscreen) {
+    modal.classList.remove('p-2', 'sm:p-4');
+    modal.classList.add('p-0');
+    container.style.width = '100vw';
+    container.style.height = '100vh';
+    container.style.maxWidth = '100vw';
+    container.style.maxHeight = '100vh';
+    container.style.borderRadius = '0';
+    if (icon) icon.setAttribute('data-lucide', 'minimize');
+  } else {
+    modal.classList.remove('p-0');
+    modal.classList.add('p-2', 'sm:p-4');
+    container.style.width = '95%';
+    container.style.height = '88vh';
+    container.style.maxWidth = '1250px';
+    container.style.maxHeight = '92vh';
+    container.style.borderRadius = '1rem';
+    if (icon) icon.setAttribute('data-lucide', 'maximize');
+  }
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
 
 async function openEditor(filePath) {
   editingFilePath = filePath;
-  document.getElementById('editorFilePath').textContent = filePath;
-  document.getElementById('editorStatus').textContent = 'Loading...';
+  const filePathEl = document.getElementById('editorFilePath');
+  const saveStatusEl = document.getElementById('editorSaveStatus');
+  const textarea = document.getElementById('editorTextarea');
+  const dirtyBadge = document.getElementById('editorDirtyBadge');
+
+  if (filePathEl) filePathEl.textContent = filePath;
+  if (saveStatusEl) saveStatusEl.textContent = 'Loading...';
+  if (dirtyBadge) dirtyBadge.classList.add('hidden');
+  if (textarea) textarea.value = '';
+
   document.getElementById('editorModal').classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
 
   try {
     const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
     if (!res.ok) {
       const err = await res.text();
       showToast('Cannot open file: ' + err, 'error');
-      closeEditor();
+      closeEditor(true);
       return;
     }
     const data = await res.json();
-    document.getElementById('editorTextarea').value = data.content;
-    document.getElementById('editorStatus').textContent = `Size: ${(data.size / 1024).toFixed(1)} KB`;
+    initialEditorContent = data.content || '';
+    textarea.value = initialEditorContent;
+    isEditorDirty = false;
+    updateEditorStats();
+    if (saveStatusEl) saveStatusEl.textContent = '';
+    setTimeout(() => { textarea.focus(); }, 100);
   } catch (err) {
     showToast('Failed to read file: ' + err, 'error');
-    closeEditor();
+    closeEditor(true);
   }
 }
 
-function closeEditor() {
+function closeEditor(force = false) {
+  if (!force && isEditorDirty) {
+    if (!confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
+      return;
+    }
+  }
+
+  // If in fullscreen, exit fullscreen first
+  if (isEditorFullscreen) {
+    toggleEditorFullscreen();
+  }
+
   document.getElementById('editorModal').classList.add('hidden');
   editingFilePath = '';
+  initialEditorContent = '';
+  isEditorDirty = false;
 }
 
 async function saveCurrentFile() {
   if (!editingFilePath) return;
-  const content = document.getElementById('editorTextarea').value;
-  const status = document.getElementById('editorStatus');
-  status.textContent = 'Saving...';
+
+  const btn = document.getElementById('editorSaveBtn');
+  const saveStatusEl = document.getElementById('editorSaveStatus');
+  const textarea = document.getElementById('editorTextarea');
+  const content = textarea.value;
+
+  btn.disabled = true;
+  btn.classList.add('opacity-75');
+  if (saveStatusEl) saveStatusEl.textContent = 'Saving to server...';
 
   try {
     const res = await fetch('/api/files/save', {
@@ -1232,19 +1484,31 @@ async function saveCurrentFile() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: editingFilePath, content })
     });
+
     if (res.ok) {
-      status.textContent = 'Saved successfully!';
+      initialEditorContent = content;
+      isEditorDirty = false;
+      const dirtyBadge = document.getElementById('editorDirtyBadge');
+      if (dirtyBadge) dirtyBadge.classList.add('hidden');
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString();
+      if (saveStatusEl) {
+        saveStatusEl.innerHTML = `<span class="text-emerald-400 font-semibold">✓ Saved (${timeStr})</span>`;
+      }
       showToast('File saved successfully!', 'success');
-      setTimeout(() => { status.textContent = ''; }, 3000);
       loadDirectory(currentPath);
     } else {
       const err = await res.text();
       showToast('Failed to save file: ' + err, 'error');
-      status.textContent = 'Save failed';
+      if (saveStatusEl) saveStatusEl.innerHTML = `<span class="text-rose-400">Save failed</span>`;
     }
   } catch (err) {
     showToast('Network error: ' + err, 'error');
-    status.textContent = 'Error';
+    if (saveStatusEl) saveStatusEl.innerHTML = `<span class="text-rose-400">Error: ${err.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-75');
   }
 }
 </script>
