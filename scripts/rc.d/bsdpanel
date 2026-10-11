@@ -22,7 +22,6 @@ load_rc_config $name
 
 pidfile="/var/run/${name}.pid"
 command="/usr/local/sbin/bsdpaneld"
-command_args="-d >> ${bsdpanel_log} 2>&1 &"
 
 start_cmd="bsdpanel_start"
 stop_cmd="bsdpanel_stop"
@@ -33,19 +32,32 @@ bsdpanel_start() {
     if [ ! -d "/var/log/bsdpanel" ]; then
         mkdir -p /var/log/bsdpanel
     fi
-    /usr/sbin/daemon -p ${pidfile} -u ${bsdpanel_user} ${command}
+    if [ ! -x "${command}" ]; then
+        echo "Error: ${command} not found or not executable. Please compile first."
+        return 1
+    fi
+    /usr/sbin/daemon -cf -p ${pidfile} -o ${bsdpanel_log} ${command}
+    sleep 1
+    if [ -f "${pidfile}" ] && kill -0 `cat ${pidfile}` 2>/dev/null; then
+        echo "BSD Panel started successfully (PID `cat ${pidfile}`). Listening on port 8888."
+    else
+        echo "Error: BSD Panel failed to start. Check log file: ${bsdpanel_log}"
+    fi
 }
 
 bsdpanel_stop() {
     echo "Stopping BSD Panel Daemon..."
     if [ -f "${pidfile}" ]; then
-        kill `cat ${pidfile}`
+        kill `cat ${pidfile}` 2>/dev/null
         rm -f ${pidfile}
+        echo "BSD Panel stopped."
+    else
+        echo "BSD Panel is not running."
     fi
 }
 
 bsdpanel_status() {
-    if [ -f "${pidfile}" ]; then
+    if [ -f "${pidfile}" ] && kill -0 `cat ${pidfile}` 2>/dev/null; then
         echo "BSD Panel is running as PID `cat ${pidfile}`"
     else
         echo "BSD Panel is not running"

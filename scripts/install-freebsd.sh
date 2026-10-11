@@ -89,13 +89,16 @@ cd "$BASE_DIR"
 cp scripts/rc.d/bsdpanel /usr/local/etc/rc.d/bsdpanel
 chmod +x /usr/local/etc/rc.d/bsdpanel
 
-echo -e "${GREEN}[7/7] Enabling Services in /etc/rc.conf...${NC}"
+echo -e "${GREEN}[7/7] Enabling and Starting Services in /etc/rc.conf...${NC}"
 sysrc bsdpanel_enable="YES"
-sysrc pf_enable="YES" || true
-sysrc fail2ban_enable="YES" || true
+
+# Start or restart bsdpanel daemon
+echo -e "${YELLOW}Starting BSD Panel service...${NC}"
+service bsdpanel restart || service bsdpanel start
 
 echo -e "${BLUE}======================================================${NC}"
 echo -e "${GREEN}   BSD Panel installation finished successfully!      ${NC}"
-echo -e "${BLUE}   Start the panel with: service bsdpanel start       ${NC}"
-echo -e "${BLUE}   Access Web UI: http://YOUR_SERVER_IP:8888          ${NC}"
+echo -e "${BLUE}   Status: service bsdpanel status                    ${NC}"
+echo -e "${BLUE}   Log:    tail -f /var/log/bsdpanel/daemon.log       ${NC}"
+echo -e "${BLUE}   Web UI: http://103.150.92.38:8888                  ${NC}"
 echo -e "${BLUE}======================================================${NC}"

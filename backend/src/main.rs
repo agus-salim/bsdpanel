@@ -7,13 +7,34 @@ mod services;
 mod state;
 
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use config::AppConfig;
 use state::AppState;
+
+fn find_ui_dir() -> PathBuf {
+    let candidates = [
+        "/usr/local/etc/bsdpanel/ui",
+        "./frontend/dist",
+        "../frontend/dist",
+        "./dist",
+    ];
+
+    for path in &candidates {
+        let p = Path::new(path);
+        if p.exists() && p.join("index.html").exists() {
+            info!("Found UI static directory: {:?}", p);
+            return p.to_path_buf();
+        }
+    }
+
+    info!("UI directory not found in candidates, defaulting to /usr/local/etc/bsdpanel/ui");
+    PathBuf::from("/usr/local/etc/bsdpanel/ui")
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,11 +67,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Build Router
     let api_router = api::create_api_router(app_state);
 
-    // Optional static SPA file server fallback
-    let app = api_router
-        .nest_service("/dist", ServeDir::new("./frontend/dist"))
-        .nest_service("/assets", ServeDir::new("./frontend/dist/assets"))
-        .layer(cors);
+    let ui_dir = find_ui_dir();
+    let index_file = ui_dir.join("index.html");
+
+    // SPA routing: static file server with fallback to index.html
+    let app = if index_file.exists() {
+        info!("Enabling SPA web server serving {:?}", ui_dir);
+        let serve_dir = ServeDir::new(&ui_dir).fallback(ServeFile::new(&index_file));
+        api_router
+            .fallback_service(serve_dir)
+            .layer(cors)
+    } else {
+        info!("index.html not found in {:?}, API only mode", ui_dir);
+        api_router.layer(cors)
+    };
 
     // 6. Bind listener
     let addr = SocketAddr::new(
