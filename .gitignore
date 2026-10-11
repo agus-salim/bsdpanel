@@ -3,6 +3,7 @@ bin/
 *.exe
 *.out
 *.test
+bsdpanel
 
 # Local runtime data
 data/

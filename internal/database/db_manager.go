@@ -279,8 +279,12 @@ func (d *DatabaseManager) CreateMariaDBDatabase(ctx context.Context, dbName, dbU
 			"CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s'; "+
 			"ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'; "+
 			"GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; "+
+			"CREATE USER IF NOT EXISTS '%s'@'127.0.0.1' IDENTIFIED BY '%s'; "+
+			"ALTER USER '%s'@'127.0.0.1' IDENTIFIED BY '%s'; "+
+			"GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'127.0.0.1'; "+
 			"FLUSH PRIVILEGES;",
 		dbName, dbUser, escapedPass, dbUser, escapedPass, dbName, dbUser,
+		dbUser, escapedPass, dbUser, escapedPass, dbName, dbUser,
 	)
 
 	cmd := "/usr/local/bin/mariadb"
@@ -377,7 +381,7 @@ func (d *DatabaseManager) DropDatabase(ctx context.Context, dbType, dbName, dbUs
 	} else {
 		sql := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName)
 		if dbUser != "" && dbUser != "root" {
-			sql += fmt.Sprintf(" DROP USER IF EXISTS '%s'@'localhost'; FLUSH PRIVILEGES;", dbUser)
+			sql += fmt.Sprintf(" DROP USER IF EXISTS '%s'@'localhost'; DROP USER IF EXISTS '%s'@'127.0.0.1'; FLUSH PRIVILEGES;", dbUser, dbUser)
 		}
 		cmd := "/usr/local/bin/mariadb"
 		args := []string{"-u", "root", "-e", sql}
@@ -408,7 +412,12 @@ func (d *DatabaseManager) UpdatePassword(ctx context.Context, dbType, dbUser, ne
 	}
 
 	escapedPass := strings.ReplaceAll(newPassword, "'", "\\'")
-	sql := fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'; FLUSH PRIVILEGES;", dbUser, escapedPass)
+	sql := fmt.Sprintf(
+		"ALTER USER IF EXISTS '%s'@'localhost' IDENTIFIED BY '%s'; "+
+			"ALTER USER IF EXISTS '%s'@'127.0.0.1' IDENTIFIED BY '%s'; "+
+			"FLUSH PRIVILEGES;",
+		dbUser, escapedPass, dbUser, escapedPass,
+	)
 	cmd := "/usr/local/bin/mariadb"
 	args := []string{"-u", "root", "-e", sql}
 	if d.exec.UseDoas {
