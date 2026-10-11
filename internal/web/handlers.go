@@ -2306,3 +2306,31 @@ func (s *Server) handleAPIPHPRestart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAPIPHPSync repairs and synchronizes all installed PHP extensions with PHP-FPM.
+func (s *Server) handleAPIPHPSync(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	version := r.URL.Query().Get("version")
+	if version == "" {
+		version = "8.3"
+	}
+
+	if err := s.phpMgr.SyncAndRepairExtensions(r.Context(), version); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Semua ekstensi PHP %s berhasil disinkronkan, file .ini telah diperbaiki, dan PHP-FPM telah di-restart.", version),
+	})
+}
+
+

@@ -113,6 +113,7 @@ func (p *PkgManager) GetPHPPkgs(version string) []string {
 	return []string{
 		fmt.Sprintf("php%s", tag),
 		fmt.Sprintf("php%s-extensions", tag),
+		fmt.Sprintf("php%s-pdo", tag),
 		fmt.Sprintf("php%s-mysqli", tag),
 		fmt.Sprintf("php%s-pgsql", tag),
 		fmt.Sprintf("php%s-curl", tag),
@@ -124,6 +125,7 @@ func (p *PkgManager) GetPHPPkgs(version string) []string {
 		fmt.Sprintf("php%s-openssl", tag),
 		fmt.Sprintf("php%s-pdo_mysql", tag),
 		fmt.Sprintf("php%s-pdo_pgsql", tag),
+		fmt.Sprintf("php%s-pdo_sqlite", tag),
 	}
 }
 

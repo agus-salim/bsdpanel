@@ -33,13 +33,14 @@ $loadedIni = php_ini_loaded_file() ?: '(None)';
 $scannedInis = php_ini_scanned_files() ?: '';
 
 // Cek Driver / Extension
+$availablePdoDrivers = class_exists('PDO') ? PDO::getAvailableDrivers() : [];
 $drivers = [
     'pdo'        => class_exists('PDO'),
-    'pdo_mysql'  => extension_loaded('pdo_mysql') && class_exists('PDO') && in_array('mysql', PDO::getAvailableDrivers()),
+    'pdo_mysql'  => (extension_loaded('pdo_mysql') || in_array('mysql', $availablePdoDrivers)) && class_exists('PDO'),
     'mysqli'     => extension_loaded('mysqli') && function_exists('mysqli_connect'),
-    'pdo_pgsql'  => extension_loaded('pdo_pgsql') && class_exists('PDO') && in_array('pgsql', PDO::getAvailableDrivers()),
+    'pdo_pgsql'  => (extension_loaded('pdo_pgsql') || in_array('pgsql', $availablePdoDrivers)) && class_exists('PDO'),
     'pgsql'      => extension_loaded('pgsql') && function_exists('pg_connect'),
-    'pdo_sqlite' => extension_loaded('pdo_sqlite') && class_exists('PDO') && in_array('sqlite', PDO::getAvailableDrivers()),
+    'pdo_sqlite' => (extension_loaded('pdo_sqlite') || in_array('sqlite', $availablePdoDrivers)) && class_exists('PDO'),
 ];
 
 // Cek Lokasi Socket MariaDB/MySQL di FreeBSD & Linux
@@ -596,11 +597,21 @@ if ($isCli) {
 
           <div class="info-item" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div class="info-val">pdo_pgsql & pgsql</div>
-              <div class="info-label">Driver PostgreSQL</div>
+              <div class="info-val">pdo_pgsql</div>
+              <div class="info-label">Driver PDO untuk PostgreSQL</div>
             </div>
-            <span class="badge <?php echo ($drivers['pdo_pgsql'] || $drivers['pgsql']) ? 'badge-success' : 'badge-warning'; ?>">
-              <?php echo ($drivers['pdo_pgsql'] || $drivers['pgsql']) ? 'TERPASANG' : 'Belum Terinstall'; ?>
+            <span class="badge <?php echo $drivers['pdo_pgsql'] ? 'badge-success' : 'badge-danger'; ?>">
+              <?php echo $drivers['pdo_pgsql'] ? 'TERPASANG' : 'BELUM TERINSTALL'; ?>
+            </span>
+          </div>
+
+          <div class="info-item" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div class="info-val">pgsql</div>
+              <div class="info-label">Driver native PostgreSQL (pg_connect)</div>
+            </div>
+            <span class="badge <?php echo $drivers['pgsql'] ? 'badge-success' : 'badge-warning'; ?>">
+              <?php echo $drivers['pgsql'] ? 'TERPASANG' : 'Belum Terinstall'; ?>
             </span>
           </div>
         </div>
@@ -647,6 +658,20 @@ if ($isCli) {
             <div class="info-label">File Konfigurasi PHP (php.ini):</div>
             <div class="info-val" style="font-size: 11px; word-break: break-all; margin-top: 4px;">
               <?php echo htmlspecialchars($loadedIni); ?>
+            </div>
+          </div>
+
+          <div class="info-item">
+            <div class="info-label">File Ekstensi (.ini) Yang Dimuat:</div>
+            <div class="info-val" style="font-size: 11px; word-break: break-all; margin-top: 4px; max-height: 80px; overflow-y: auto;">
+              <?php 
+              if (!empty($scannedInis)) {
+                  $iniFiles = array_filter(array_map('trim', explode(',', $scannedInis)));
+                  echo implode('<br>', array_map('htmlspecialchars', $iniFiles));
+              } else {
+                  echo "<span style='color: #f59e0b;'>Tidak ada file ekstensi aktif di direktori scan</span>";
+              }
+              ?>
             </div>
           </div>
         </div>

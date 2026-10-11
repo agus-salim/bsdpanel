@@ -140,7 +140,7 @@ pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 
 chdir = %s
-php_admin_value[open_basedir] = /usr/home/%s:/tmp:/var/tmp
+php_admin_value[open_basedir] = /usr/home/%s:/tmp:/var/tmp:/var/run/mysql:/var/run/postgresql:/usr/local/etc/php
 php_admin_value[session.save_path] = /tmp
 php_admin_value[upload_tmp_dir] = /tmp
 `, site.Domain, site.SystemUser, site.SystemUser, sockPath, site.DocumentRoot, site.SystemUser)
@@ -622,7 +622,20 @@ include = /usr/local/etc/php-fpm.d/*.conf
 		}
 	}
 
-	// 2. Ensure php_fpm is enabled in /etc/rc.conf
+	// 2. Ensure /usr/local/etc/php.ini exists from production template if missing
+	phpIniPath := "/usr/local/etc/php.ini"
+	if _, err := os.Stat(phpIniPath); os.IsNotExist(err) {
+		prodTemplate := "/usr/local/etc/php.ini-production"
+		devTemplate := "/usr/local/etc/php.ini-development"
+		if data, err := os.ReadFile(prodTemplate); err == nil {
+			_ = os.WriteFile(phpIniPath, data, 0644)
+		} else if data, err := os.ReadFile(devTemplate); err == nil {
+			_ = os.WriteFile(phpIniPath, data, 0644)
+		}
+	}
+	_ = os.MkdirAll("/usr/local/etc/php", 0755)
+
+	// 3. Ensure php_fpm is enabled in /etc/rc.conf
 	_, _ = m.exec.Execute(ctx, "/usr/sbin/sysrc", "php_fpm_enable=YES")
 
 	return nil
@@ -647,6 +660,9 @@ func (m *SiteManager) restartPHP(ctx context.Context, version string) error {
 		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "start")
 		_, _ = m.exec.Execute(ctx, "/usr/sbin/service", svcName, "onestart")
 	}
+
+	// Graceful reload signal to running PHP-FPM master processes
+	_, _ = m.exec.Execute(ctx, "/usr/bin/killall", "-USR2", "php-fpm")
 
 	return nil
 }

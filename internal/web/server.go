@@ -151,6 +151,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/php/extension/install", s.handleAPIPHPExtensionInstall)
 	mux.HandleFunc("/api/php/extension/uninstall", s.handleAPIPHPExtensionUninstall)
 	mux.HandleFunc("/api/php/restart", s.handleAPIPHPRestart)
+	mux.HandleFunc("/api/php/sync", s.handleAPIPHPSync)
 
 	// REST API Endpoints (Protected)
 	mux.HandleFunc("/api/stats", s.handleAPIStats)
