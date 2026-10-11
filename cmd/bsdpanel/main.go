@@ -11,6 +11,7 @@ import (
 
 	"bsdpanel/internal/config"
 	"bsdpanel/internal/database"
+	"bsdpanel/internal/php"
 	"bsdpanel/internal/sites"
 	"bsdpanel/internal/system"
 	"bsdpanel/internal/web"
@@ -37,6 +38,7 @@ func main() {
 	firewallMgr := system.NewFirewallManager(exec, serviceMgr)
 	siteMgr := sites.NewSiteManager(userMgr, serviceMgr, exec, cfg.DataDir)
 	dbMgr := database.NewDatabaseManager(exec, cfg.DataDir)
+	phpMgr := php.NewPHPManager(exec, pkgMgr, serviceMgr)
 	archiveMgr := system.NewArchiveManager(exec)
 
 	// Automatically ensure Nginx includes conf.d and synchronize all vhosts
@@ -58,6 +60,7 @@ func main() {
 		firewallMgr,
 		siteMgr,
 		dbMgr,
+		phpMgr,
 		archiveMgr,
 		webassets.Assets,
 	)

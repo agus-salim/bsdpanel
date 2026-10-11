@@ -62,6 +62,11 @@
         <span>Databases</span>
       </a>
 
+      <a href="/php" class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all {{if eq .ActiveNav "php"}}bg-sky-500/15 text-sky-400 font-semibold border-l-2 border-sky-400{{else}}text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-l-2 border-transparent font-medium{{end}}">
+        <i data-lucide="cpu" class="w-4 h-4"></i>
+        <span>PHP Management</span>
+      </a>
+
       <a href="/firewall" class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all {{if eq .ActiveNav "firewall"}}bg-sky-500/15 text-sky-400 font-semibold border-l-2 border-sky-400{{else}}text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-l-2 border-transparent font-medium{{end}}">
         <i data-lucide="shield" class="w-4 h-4"></i>
         <span>PF Firewall & Fail2ban</span>

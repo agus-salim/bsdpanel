@@ -14,6 +14,7 @@ import (
 
 	"bsdpanel/internal/config"
 	"bsdpanel/internal/database"
+	"bsdpanel/internal/php"
 	"bsdpanel/internal/sites"
 	"bsdpanel/internal/system"
 )
@@ -28,6 +29,7 @@ type Server struct {
 	firewallMgr *system.FirewallManager
 	siteMgr     *sites.SiteManager
 	dbMgr       *database.DatabaseManager
+	phpMgr      *php.PHPManager
 	archiveMgr  *system.ArchiveManager
 	pages       map[string]*template.Template
 	staticFS    http.FileSystem
@@ -45,6 +47,7 @@ func NewServer(
 	firewallMgr *system.FirewallManager,
 	siteMgr *sites.SiteManager,
 	dbMgr *database.DatabaseManager,
+	phpMgr *php.PHPManager,
 	archiveMgr *system.ArchiveManager,
 	embeddedAssets embed.FS,
 ) (*Server, error) {
@@ -55,6 +58,7 @@ func NewServer(
 		"sites.html",
 		"services.html",
 		"databases.html",
+		"php.html",
 		"firewall.html",
 		"terminal.html",
 		"files.html",
@@ -89,6 +93,7 @@ func NewServer(
 		firewallMgr: firewallMgr,
 		siteMgr:     siteMgr,
 		dbMgr:       dbMgr,
+		phpMgr:      phpMgr,
 		archiveMgr:  archiveMgr,
 		pages:       pages,
 		staticFS:    http.FS(staticSub),
@@ -135,9 +140,17 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/sites", s.handleSitesPage)
 	mux.HandleFunc("/services", s.handleServicesPage)
 	mux.HandleFunc("/databases", s.handleDatabasesPage)
+	mux.HandleFunc("/php", s.handlePHPManagementPage)
 	mux.HandleFunc("/firewall", s.handleFirewallPage)
 	mux.HandleFunc("/terminal", s.handleTerminalPage)
 	mux.HandleFunc("/files", s.handleFilesPage)
+
+	// PHP Management APIs
+	mux.HandleFunc("/api/php/versions", s.handleAPIPHPVersions)
+	mux.HandleFunc("/api/php/extensions", s.handleAPIPHPExtensions)
+	mux.HandleFunc("/api/php/extension/install", s.handleAPIPHPExtensionInstall)
+	mux.HandleFunc("/api/php/extension/uninstall", s.handleAPIPHPExtensionUninstall)
+	mux.HandleFunc("/api/php/restart", s.handleAPIPHPRestart)
 
 	// REST API Endpoints (Protected)
 	mux.HandleFunc("/api/stats", s.handleAPIStats)

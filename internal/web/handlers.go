@@ -353,6 +353,34 @@ func (s *Server) handleDatabasesPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "databases.html", data)
 }
 
+// handlePHPManagementPage renders the PHP management and extension view.
+func (s *Server) handlePHPManagementPage(w http.ResponseWriter, r *http.Request) {
+	versions, _ := s.phpMgr.ListVersions(r.Context())
+	defaultVersion := "8.3"
+	for _, v := range versions {
+		if v.IsDefault && v.IsInstalled {
+			defaultVersion = v.Version
+			break
+		}
+	}
+
+	selectedVersion := r.URL.Query().Get("version")
+	if selectedVersion == "" {
+		selectedVersion = defaultVersion
+	}
+
+	extensions, _ := s.phpMgr.ListExtensions(r.Context(), selectedVersion)
+
+	data := map[string]interface{}{
+		"Title":           "PHP Management",
+		"ActiveNav":       "php",
+		"Versions":        versions,
+		"SelectedVersion": selectedVersion,
+		"Extensions":      extensions,
+	}
+	s.render(w, "php.html", data)
+}
+
 // handleFirewallPage renders PF and Fail2ban firewall control.
 func (s *Server) handleFirewallPage(w http.ResponseWriter, r *http.Request) {
 	pfActive := s.firewallMgr.IsPFActive(r.Context())
@@ -2132,3 +2160,149 @@ func (s *Server) handleAPIFilesExtract(w http.ResponseWriter, r *http.Request) {
 		"dest_path": destPath,
 	})
 }
+
+// handleAPIPHPVersions returns list of installed/available PHP versions.
+func (s *Server) handleAPIPHPVersions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	versions, err := s.phpMgr.ListVersions(r.Context())
+	if err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"versions": versions,
+	})
+}
+
+// handleAPIPHPExtensions returns list of extensions for a specified PHP version.
+func (s *Server) handleAPIPHPExtensions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	version := r.URL.Query().Get("version")
+	if version == "" {
+		version = "8.3"
+	}
+	extensions, err := s.phpMgr.ListExtensions(r.Context(), version)
+	if err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"version":    version,
+		"extensions": extensions,
+	})
+}
+
+// handleAPIPHPExtensionInstall installs an extension for a given PHP version.
+func (s *Server) handleAPIPHPExtensionInstall(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Version   string `json:"version"`
+		Extension string `json:"extension"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "format permintaan tidak valid",
+		})
+		return
+	}
+
+	if req.Version == "" || req.Extension == "" {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "parameter version dan extension wajib diisi",
+		})
+		return
+	}
+
+	if err := s.phpMgr.InstallExtension(r.Context(), req.Version, req.Extension); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Ekstensi '%s' berhasil diinstall untuk PHP %s dan PHP-FPM telah di-restart.", req.Extension, req.Version),
+	})
+}
+
+// handleAPIPHPExtensionUninstall removes an extension for a given PHP version.
+func (s *Server) handleAPIPHPExtensionUninstall(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Version   string `json:"version"`
+		Extension string `json:"extension"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "format permintaan tidak valid",
+		})
+		return
+	}
+
+	if req.Version == "" || req.Extension == "" {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "parameter version dan extension wajib diisi",
+		})
+		return
+	}
+
+	if err := s.phpMgr.UninstallExtension(r.Context(), req.Version, req.Extension); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Ekstensi '%s' berhasil dihapus dari PHP %s dan PHP-FPM telah di-restart.", req.Extension, req.Version),
+	})
+}
+
+// handleAPIPHPRestart restarts PHP-FPM service.
+func (s *Server) handleAPIPHPRestart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := s.phpMgr.RestartPHP(r.Context()); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Layanan PHP-FPM berhasil di-restart.",
+	})
+}
+

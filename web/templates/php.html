@@ -1,0 +1,394 @@
+{{template "layout" .}}
+
+{{define "content"}}
+<div class="space-y-6">
+  <!-- Top Header Bar -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+        <i data-lucide="cpu" class="w-5 h-5 text-indigo-400"></i>
+        <span>PHP Management & Extensions</span>
+      </h2>
+      <p class="text-xs text-slate-400 mt-0.5">Kelola versi PHP yang terpasang, instalasi driver database (PostgreSQL, MySQL, Redis), dan ekstensi modul FreeBSD</p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button type="button" onclick="handleRestartPHP()" id="restartPHPBtn" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm">
+        <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-sky-400"></i>
+        <span>Restart PHP-FPM</span>
+      </button>
+      <button type="button" onclick="refreshCurrentVersion()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- PHP Version Selector Tabs / Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    {{range .Versions}}
+    <div onclick="selectPHPVersion('{{.Version}}')" class="p-3.5 rounded-xl border transition-all cursor-pointer {{if eq $.SelectedVersion .Version}}bg-indigo-950/30 border-indigo-500/80 shadow-md ring-1 ring-indigo-500/30{{else}}bg-dark-800 hover:bg-dark-750 border-slate-700/70 hover:border-slate-600{{end}}">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center font-bold font-mono text-xs {{if eq $.SelectedVersion .Version}}bg-indigo-500/20 text-indigo-400{{else}}bg-slate-700/30 text-slate-300{{end}}">
+            PHP
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-100">PHP {{.Version}}</h3>
+            {{if .IsDefault}}
+              <span class="text-[10px] text-sky-400 font-mono font-medium">CLI Default</span>
+            {{end}}
+          </div>
+        </div>
+
+        {{if .IsInstalled}}
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Terpasang</span>
+          </span>
+        {{else}}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+            Tersedia (pkg)
+          </span>
+        {{end}}
+      </div>
+
+      <div class="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-700/40">
+        <span class="font-mono">{{if .FullVersion}}v{{.FullVersion}}{{else}}Paket {{.Tag}}{{end}}</span>
+        <span class="text-indigo-400 hover:underline text-[11px] font-medium">
+          {{if eq $.SelectedVersion .Version}}&bull; Sedang Dipilih{{else}}Pilih Versi &rarr;{{end}}
+        </span>
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <!-- Extensions Management Card -->
+  <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
+    <!-- Header with Search and Filter Pills -->
+    <div class="p-4 border-b border-slate-700/60 bg-dark-850 flex flex-col gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+            <span>Daftar Ekstensi & Driver untuk PHP</span>
+            <span class="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 font-mono font-bold text-xs">
+              {{.SelectedVersion}}
+            </span>
+          </h3>
+          <span id="installedCountBadge" class="px-2 py-0.5 rounded-full text-[11px] font-mono bg-dark-900 border border-slate-700 text-slate-300">
+            Memuat...
+          </span>
+        </div>
+
+        <!-- Search Input -->
+        <div class="relative w-full sm:w-72">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+          <input type="text" id="extSearchInput" oninput="filterExtensions()" placeholder="Cari pgsql, mysql, redis, curl..." class="w-full pl-9 pr-3 py-1.5 bg-dark-900 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono">
+        </div>
+      </div>
+
+      <!-- Filter Categories & Status -->
+      <div class="flex flex-wrap items-center gap-1.5 text-xs pt-1">
+        <span class="text-[11px] text-slate-500 font-medium mr-1">Filter Kategori:</span>
+        <button type="button" onclick="setCategoryFilter('all')" class="cat-pill active px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-600 text-white cursor-pointer transition-all" data-category="all">
+          Semua
+        </button>
+        <button type="button" onclick="setCategoryFilter('Database')" class="cat-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all" data-category="Database">
+          🗄️ Database (PgSQL/MySQL/Redis)
+        </button>
+        <button type="button" onclick="setCategoryFilter('Core & Network')" class="cat-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all" data-category="Core & Network">
+          🌐 Core & Network
+        </button>
+        <button type="button" onclick="setCategoryFilter('Files & Documents')" class="cat-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all" data-category="Files & Documents">
+          📁 Files & ZIP
+        </button>
+        <button type="button" onclick="setCategoryFilter('Graphics & Media')" class="cat-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all" data-category="Graphics & Media">
+          🖼️ Media (GD/Imagick)
+        </button>
+        <button type="button" onclick="setCategoryFilter('Security & Cache')" class="cat-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all" data-category="Security & Cache">
+          ⚡ Security & Cache
+        </button>
+
+        <span class="border-l border-slate-700/80 h-4 mx-1"></span>
+
+        <!-- Status Filter -->
+        <button type="button" onclick="setStatusFilter('all')" class="status-pill active px-2.5 py-1 rounded-md text-xs font-medium bg-slate-700 text-white cursor-pointer transition-all" data-status="all">
+          Semua Status
+        </button>
+        <button type="button" onclick="setStatusFilter('installed')" class="status-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-emerald-400 border border-slate-700 cursor-pointer transition-all" data-status="installed">
+          Terinstall
+        </button>
+        <button type="button" onclick="setStatusFilter('missing')" class="status-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-amber-400 border border-slate-700 cursor-pointer transition-all" data-status="missing">
+          Belum Terinstall
+        </button>
+      </div>
+    </div>
+
+    <!-- Alert / Tips Box -->
+    <div class="px-4 py-2.5 bg-dark-900/60 border-b border-slate-700/40 text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-1.5">
+        <i data-lucide="info" class="w-3.5 h-3.5 text-sky-400 flex-shrink-0"></i>
+        <span>Tips: Untuk menghubungkan website PHP ke database PostgreSQL, pastikan <strong>pdo_pgsql</strong> dan <strong>pgsql</strong> dalam status Terinstall.</span>
+      </div>
+      <span class="text-slate-500 font-mono">PHP-FPM otomatis di-restart setelah install/uninstall</span>
+    </div>
+
+    <!-- Extensions Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+          <tr>
+            <th class="px-4 py-3">Nama Ekstensi</th>
+            <th class="px-4 py-3">Paket FreeBSD</th>
+            <th class="px-4 py-3">Kategori</th>
+            <th class="px-4 py-3">Deskripsi & Kegunaan</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="extTableBody" class="divide-y divide-slate-700/40 text-slate-300">
+          {{range .Extensions}}
+          <tr class="hover:bg-dark-750 transition-all ext-row" data-name="{{.Name}}" data-pkg="{{.PkgName}}" data-cat="{{.Category}}" data-installed="{{if .IsInstalled}}true{{else}}false{{end}}">
+            <!-- Nama Ekstensi -->
+            <td class="px-4 py-3 font-semibold text-slate-100 whitespace-nowrap">
+              <span class="font-mono text-xs text-sky-400">{{.Name}}</span>
+            </td>
+
+            <!-- Paket FreeBSD -->
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-dark-900 text-slate-300 border border-slate-700/80 font-mono text-[11px]">
+                {{.PkgName}}
+              </span>
+            </td>
+
+            <!-- Kategori -->
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium
+                {{if eq .Category "Database"}}bg-indigo-500/10 text-indigo-400 border border-indigo-500/20{{end}}
+                {{if eq .Category "Core & Network"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20{{end}}
+                {{if eq .Category "Files & Documents"}}bg-amber-500/10 text-amber-400 border border-amber-500/20{{end}}
+                {{if eq .Category "Graphics & Media"}}bg-sky-500/10 text-sky-400 border border-sky-500/20{{end}}
+                {{if eq .Category "Security & Cache"}}bg-purple-500/10 text-purple-400 border border-purple-500/20{{end}}
+              ">
+                {{.Category}}
+              </span>
+            </td>
+
+            <!-- Deskripsi -->
+            <td class="px-4 py-3 text-slate-400 text-xs">
+              {{.Description}}
+            </td>
+
+            <!-- Status -->
+            <td class="px-4 py-3 whitespace-nowrap">
+              {{if .IsInstalled}}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>Terinstall</span>
+                </span>
+              {{else}}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-dark-900 text-slate-400 border border-slate-700">
+                  <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                  <span>Belum Terinstall</span>
+                </span>
+              {{end}}
+            </td>
+
+            <!-- Aksi -->
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              {{if .IsInstalled}}
+                <button type="button" onclick="handleUninstallExtension('{{$.SelectedVersion}}', '{{.Name}}', '{{.PkgName}}', this)" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
+                  <span>Hapus</span>
+                </button>
+              {{else}}
+                <button type="button" onclick="handleInstallExtension('{{$.SelectedVersion}}', '{{.Name}}', '{{.PkgName}}', this)" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all cursor-pointer">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  <span>Install</span>
+                </button>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentVersion = "{{.SelectedVersion}}";
+let activeCategory = "all";
+let activeStatus = "all";
+
+document.addEventListener('DOMContentLoaded', () => {
+  updateExtensionCounts();
+});
+
+function selectPHPVersion(ver) {
+  window.location.href = `/php?version=${encodeURIComponent(ver)}`;
+}
+
+function refreshCurrentVersion() {
+  window.location.reload();
+}
+
+function updateExtensionCounts() {
+  const rows = document.querySelectorAll('#extTableBody .ext-row');
+  let installed = 0;
+  let total = rows.length;
+
+  rows.forEach(r => {
+    if (r.getAttribute('data-installed') === 'true') {
+      installed++;
+    }
+  });
+
+  const badge = document.getElementById('installedCountBadge');
+  if (badge) {
+    badge.textContent = `${installed} / ${total} Ekstensi Terinstall`;
+  }
+}
+
+function setCategoryFilter(cat) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-pill').forEach(btn => {
+    if (btn.getAttribute('data-category') === cat) {
+      btn.className = 'cat-pill active px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-600 text-white cursor-pointer transition-all';
+    } else {
+      btn.className = 'cat-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all';
+    }
+  });
+  filterExtensions();
+}
+
+function setStatusFilter(status) {
+  activeStatus = status;
+  document.querySelectorAll('.status-pill').forEach(btn => {
+    if (btn.getAttribute('data-status') === status) {
+      btn.className = 'status-pill active px-2.5 py-1 rounded-md text-xs font-medium bg-slate-700 text-white cursor-pointer transition-all';
+    } else {
+      btn.className = 'status-pill px-2.5 py-1 rounded-md text-xs font-medium bg-dark-900 text-slate-400 hover:text-slate-200 border border-slate-700 cursor-pointer transition-all';
+    }
+  });
+  filterExtensions();
+}
+
+function filterExtensions() {
+  const query = document.getElementById('extSearchInput').value.toLowerCase().trim();
+  const rows = document.querySelectorAll('#extTableBody .ext-row');
+
+  rows.forEach(row => {
+    const name = row.getAttribute('data-name').toLowerCase();
+    const pkg = row.getAttribute('data-pkg').toLowerCase();
+    const cat = row.getAttribute('data-cat');
+    const isInstalled = row.getAttribute('data-installed') === 'true';
+
+    let matchSearch = !query || name.includes(query) || pkg.includes(query);
+    let matchCat = (activeCategory === 'all') || (cat === activeCategory);
+    let matchStatus = true;
+    if (activeStatus === 'installed') matchStatus = isInstalled;
+    if (activeStatus === 'missing') matchStatus = !isInstalled;
+
+    if (matchSearch && matchCat && matchStatus) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+async function handleInstallExtension(version, extName, pkgName, btn) {
+  const originalContent = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Menginstall...</span>`;
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  try {
+    const res = await fetch('/api/php/extension/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: version, extension: extName })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert(`🎉 BERHASIL!\n\nEkstensi '${extName}' (${pkgName}) berhasil dipasang untuk PHP ${version}.\nLayanan PHP-FPM telah otomatis di-restart.`);
+      window.location.reload();
+    } else {
+      alert(`❌ GAGAL MENGINSTALL EKSTENSI:\n\n${data.error || 'Terjadi kesalahan sistem'}`);
+      btn.disabled = false;
+      btn.innerHTML = originalContent;
+      if (window.renderLucideIcons) window.renderLucideIcons();
+    }
+  } catch (err) {
+    alert(`❌ Kesalahan jaringan: ${err}`);
+    btn.disabled = false;
+    btn.innerHTML = originalContent;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+async function handleUninstallExtension(version, extName, pkgName, btn) {
+  if (!confirm(`Yakin ingin menghapus ekstensi '${extName}' (${pkgName}) dari PHP ${version}?\n\nAplikasi atau website yang membutuhkan fungsi ini mungkin akan mengalami error jika ekstensi dinonaktifkan.`)) {
+    return;
+  }
+
+  const originalContent = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Menghapus...</span>`;
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  try {
+    const res = await fetch('/api/php/extension/uninstall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: version, extension: extName })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert(`✅ Ekstensi '${extName}' (${pkgName}) berhasil dihapus.\nLayanan PHP-FPM telah di-restart.`);
+      window.location.reload();
+    } else {
+      alert(`❌ Gagal menghapus ekstensi:\n\n${data.error || 'Terjadi kesalahan sistem'}`);
+      btn.disabled = false;
+      btn.innerHTML = originalContent;
+      if (window.renderLucideIcons) window.renderLucideIcons();
+    }
+  } catch (err) {
+    alert(`❌ Kesalahan jaringan: ${err}`);
+    btn.disabled = false;
+    btn.innerHTML = originalContent;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+async function handleRestartPHP() {
+  const btn = document.getElementById('restartPHPBtn');
+  const originalContent = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin text-sky-400"></i><span>Merestart...</span>`;
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  try {
+    const res = await fetch('/api/php/restart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert('🎉 Layanan PHP-FPM berhasil di-restart!');
+    } else {
+      alert(`❌ Gagal merestart PHP-FPM: ${data.error || 'Terjadi kesalahan'}`);
+    }
+  } catch (err) {
+    alert(`❌ Kesalahan jaringan: ${err}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalContent;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+</script>
+{{end}}
