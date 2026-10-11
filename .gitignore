@@ -1,16 +1,25 @@
-# Binaries and build artifacts
-bin/
-*.exe
-*.out
-*.test
-/bsdpanel
+# Rust build artifacts
+target/
+**/*.rs.bk
+Cargo.lock
 
-# Local runtime data
-data/
+# Node / Frontend build artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment & Secrets
+.env
+.env.local
 *.log
+data/
 
-# OS / Editor specific
+# IDE / OS files
 .DS_Store
 Thumbs.db
-.idea/
 .vscode/
+.idea/

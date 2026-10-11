@@ -1,0 +1,32 @@
+[package]
+name = "bsdpaneld"
+version = "1.0.0"
+edition = "2021"
+authors = ["BSD Panel Team <admin@bsdpanel.org>"]
+description = "Lightweight yet powerful FreeBSD Web Hosting & System Control Panel"
+license = "BSD-2-Clause"
+
+[dependencies]
+axum = { version = "0.7", features = ["ws", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonwebtoken = "9.2"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = "0.12"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+argon2 = "0.5"
+regex = "1.10"
+sysinfo = "0.30"
+dotenvy = "0.15"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
