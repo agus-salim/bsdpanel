@@ -9,6 +9,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
 echo -e "${BLUE}======================================================${NC}"
@@ -24,46 +25,70 @@ echo -e "${GREEN}[1/7] Updating FreeBSD pkg repositories...${NC}"
 pkg update -f
 
 echo -e "${GREEN}[2/7] Installing Core Dependencies & Compilers...${NC}"
-pkg install -y rust cargo node npm git curl sudo fail2ban bash
+# In FreeBSD, package 'rust' includes cargo.
+pkg install -y rust git curl sudo bash || pkg install -y rust git curl bash
+
+# Install Node & NPM (handles FreeBSD naming variations: node20/node22/node)
+echo -e "${YELLOW}Installing Node.js & NPM...${NC}"
+pkg install -y node20 npm-node20 || pkg install -y node22 npm-node22 || pkg install -y node npm || true
+
+# Install Fail2ban (in FreeBSD named py311-fail2ban / py310-fail2ban / fail2ban)
+echo -e "${YELLOW}Installing Fail2ban...${NC}"
+pkg install -y py311-fail2ban || pkg install -y py310-fail2ban || pkg install -y py39-fail2ban || pkg install -y fail2ban || true
 
 echo -e "${GREEN}[3/7] Installing Multi Web Servers (Nginx, Apache, Caddy)...${NC}"
-pkg install -y nginx apache24 caddy
+pkg install -y nginx apache24 caddy || true
 
 echo -e "${GREEN}[4/7] Installing Multi PHP Versions (PHP 8.2, 8.3, 8.4)...${NC}"
-pkg install -y \
-    php82 php82-curl php82-mbstring php82-mysqli php82-pdo_pgsql php82-opcache \
-    php83 php83-curl php83-mbstring php83-mysqli php83-pdo_pgsql php83-opcache \
-    php84 php84-curl php84-mbstring php84-mysqli php84-pdo_pgsql php84-opcache || true
+pkg install -y php82 php82-curl php82-mbstring php82-mysqli php82-pdo_pgsql php82-opcache || true
+pkg install -y php83 php83-curl php83-mbstring php83-mysqli php83-pdo_pgsql php83-opcache || true
+pkg install -y php84 php84-curl php84-mbstring php84-mysqli php84-pdo_pgsql php84-opcache || true
 
-echo -e "${GREEN}[5/7] Installing Multi Databases (PostgreSQL 16 & MariaDB 10.11)...${NC}"
-pkg install -y mariadb1011-server mariadb1011-client postgresql16-server postgresql16-client
+echo -e "${GREEN}[5/7] Installing Multi Databases (PostgreSQL & MariaDB)...${NC}"
+pkg install -y mariadb1011-server mariadb1011-client || pkg install -y mariadb106-server mariadb106-client || true
+pkg install -y postgresql16-server postgresql16-client || pkg install -y postgresql15-server postgresql15-client || true
 
 echo -e "${GREEN}[6/7] Building BSD Panel Daemon and UI...${NC}"
 mkdir -p /usr/local/etc/bsdpanel
 mkdir -p /var/log/bsdpanel
 mkdir -p /usr/local/www
 
-# Copy files & build
-cd "$(dirname "$0")/.."
-cargo build --release
-cp target/release/bsdpaneld /usr/local/sbin/bsdpaneld
-chmod +x /usr/local/sbin/bsdpaneld
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$BASE_DIR"
 
-# Build UI
-cd frontend
-npm install
-npm run build
-mkdir -p /usr/local/etc/bsdpanel/ui
-cp -r dist/* /usr/local/etc/bsdpanel/ui/
+# Build Rust backend
+if command -v cargo >/dev/null 2>&1; then
+    echo -e "${YELLOW}Compiling Rust backend (bsdpaneld)...${NC}"
+    cargo build --release
+    cp target/release/bsdpaneld /usr/local/sbin/bsdpaneld
+    chmod +x /usr/local/sbin/bsdpaneld
+else
+    echo -e "${RED}Cargo not found! Make sure package 'rust' is installed.${NC}"
+    exit 1
+fi
+
+# Build Vue 3 UI
+cd "$BASE_DIR/frontend"
+if command -v npm >/dev/null 2>&1; then
+    echo -e "${YELLOW}Building Vue 3 Frontend...${NC}"
+    npm install
+    npm run build
+    mkdir -p /usr/local/etc/bsdpanel/ui
+    cp -r dist/* /usr/local/etc/bsdpanel/ui/
+else
+    echo -e "${YELLOW}NPM not found. Creating placeholder UI directory...${NC}"
+    mkdir -p /usr/local/etc/bsdpanel/ui
+fi
 
 # Install rc.d script
-cp ../scripts/rc.d/bsdpanel /usr/local/etc/rc.d/bsdpanel
+cd "$BASE_DIR"
+cp scripts/rc.d/bsdpanel /usr/local/etc/rc.d/bsdpanel
 chmod +x /usr/local/etc/rc.d/bsdpanel
 
 echo -e "${GREEN}[7/7] Enabling Services in /etc/rc.conf...${NC}"
 sysrc bsdpanel_enable="YES"
-sysrc pf_enable="YES"
-sysrc fail2ban_enable="YES"
+sysrc pf_enable="YES" || true
+sysrc fail2ban_enable="YES" || true
 
 echo -e "${BLUE}======================================================${NC}"
 echo -e "${GREEN}   BSD Panel installation finished successfully!      ${NC}"
