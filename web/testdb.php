@@ -51,7 +51,7 @@ $socketCandidates = [
 ];
 $foundMysqlSockets = [];
 foreach ($socketCandidates as $sock) {
-    if (file_exists($sock)) {
+    if (@file_exists($sock)) {
         $foundMysqlSockets[] = $sock;
     }
 }

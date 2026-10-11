@@ -159,49 +159,27 @@ func (p *PHPManager) ListVersions(ctx context.Context) ([]PHPVersionInfo, error)
 	return results, nil
 }
 
-// ListExtensions returns the status of all known extensions for the specified PHP version.
+// ListExtensions returns the real status of all known extensions for the specified PHP version.
 func (p *PHPManager) ListExtensions(ctx context.Context, version string) ([]PHPExtensionStatus, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	tag := "php" + strings.ReplaceAll(version, ".", "")
 
-	// 1. Query installed packages starting with the php tag (e.g. "php83-*")
+	// 1. Query installed packages from FreeBSD local pkg database using `pkg query '%n %v'`
+	// This only returns packages that are ACTUALLY installed locally (no dependencies, no options).
 	installedPkgMap := make(map[string]string)
 	cmd := "/usr/sbin/pkg"
-	args := []string{"info", tag + "*"}
+	args := []string{"query", "%n %v"}
 	if res, err := p.exec.Execute(ctx, cmd, args...); err == nil && res.Stdout != "" {
 		for _, line := range strings.Split(res.Stdout, "\n") {
 			fields := strings.Fields(line)
-			if len(fields) >= 1 {
-				pkgWithVer := fields[0] // e.g. "php83-pdo_pgsql-8.3.33"
-				// Extract package base name
-				parts := strings.Split(pkgWithVer, "-")
-				if len(parts) >= 2 {
-					// join all except the last component which is version
-					baseName := strings.Join(parts[:len(parts)-1], "-")
-					installedPkgMap[baseName] = parts[len(parts)-1]
+			if len(fields) >= 2 {
+				pkgName := fields[0] // e.g. "php83-mysqli"
+				pkgVer := fields[1]  // e.g. "8.3.33"
+				if strings.HasPrefix(pkgName, tag+"-") || pkgName == tag {
+					installedPkgMap[pkgName] = pkgVer
 				}
-			}
-		}
-	}
-
-	// 2. Query active PHP modules via CLI (e.g., `php83 -m` or `php -m`)
-	activeModules := make(map[string]bool)
-	binCandidates := []string{
-		fmt.Sprintf("/usr/local/bin/%s", tag),
-		"/usr/local/bin/php",
-	}
-	for _, bin := range binCandidates {
-		if _, err := os.Stat(bin); err == nil {
-			if res, err := p.exec.Execute(ctx, bin, "-m"); err == nil && res.Stdout != "" {
-				for _, line := range strings.Split(res.Stdout, "\n") {
-					mod := strings.ToLower(strings.TrimSpace(line))
-					if mod != "" {
-						activeModules[mod] = true
-					}
-				}
-				break
 			}
 		}
 	}
@@ -213,13 +191,30 @@ func (p *PHPManager) ListExtensions(ctx context.Context, version string) ([]PHPE
 		isInstalled := false
 		extVer := ""
 
-		// Check if package is installed via pkg info
+		// Check 1: Does the package exist in the real installed pkg query?
 		if ver, ok := installedPkgMap[fullPkgName]; ok {
 			isInstalled = true
 			extVer = ver
-		} else if activeModules[strings.ToLower(ext.Name)] {
-			// Module is active in PHP runtime
-			isInstalled = true
+		} else {
+			// Check 2: Direct verification via FreeBSD `pkg info -e <fullPkgName>`
+			if p.pkgMgr.IsInstalled(ctx, fullPkgName) {
+				isInstalled = true
+			}
+		}
+
+		// Check 3: Check if FreeBSD extension config file exists
+		if !isInstalled {
+			iniCandidates := []string{
+				fmt.Sprintf("/usr/local/etc/php/ext-20-%s.ini", ext.PkgSuffix),
+				fmt.Sprintf("/usr/local/etc/php/ext-30-%s.ini", ext.PkgSuffix),
+				fmt.Sprintf("/usr/local/etc/%s/ext-20-%s.ini", tag, ext.PkgSuffix),
+			}
+			for _, ini := range iniCandidates {
+				if _, err := os.Stat(ini); err == nil {
+					isInstalled = true
+					break
+				}
+			}
 		}
 
 		results = append(results, PHPExtensionStatus{
