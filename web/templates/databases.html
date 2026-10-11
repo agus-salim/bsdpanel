@@ -2,97 +2,725 @@
 
 {{define "content"}}
 <div class="space-y-6">
-  <div class="flex items-center justify-between">
+  <!-- Top Header & Action Buttons -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
-      <h2 class="text-base font-bold text-slate-100">Database Management</h2>
-      <p class="text-xs text-slate-400 mt-0.5">Manage MariaDB & PostgreSQL engines with user isolation</p>
+      <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+        <i data-lucide="database" class="w-5 h-5 text-indigo-400"></i>
+        <span>Database Management</span>
+      </h2>
+      <p class="text-xs text-slate-400 mt-0.5">Kelola database MariaDB (MySQL) & PostgreSQL dengan isolasi hak akses pengguna</p>
     </div>
-    <div class="flex gap-2">
-      <a href="/phpmyadmin" target="_blank" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 flex items-center gap-1.5 transition-all">
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- phpMyAdmin Button -->
+      <button type="button" onclick="openTool('phpmyadmin')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm">
         <i data-lucide="external-link" class="w-3.5 h-3.5 text-amber-400"></i>
         <span>phpMyAdmin</span>
-      </a>
-      <a href="/phppgadmin" target="_blank" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 flex items-center gap-1.5 transition-all">
+      </button>
+
+      <!-- phpPgAdmin Button -->
+      <button type="button" onclick="openTool('phppgadmin')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm">
         <i data-lucide="external-link" class="w-3.5 h-3.5 text-indigo-400"></i>
         <span>phpPgAdmin</span>
-      </a>
+      </button>
+
+      <!-- Add Database Button -->
+      <button type="button" onclick="openCreateDBModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-sm">
+        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+        <span>Tambah Database</span>
+      </button>
     </div>
   </div>
 
-  <!-- Create Database Card -->
-  <div class="bg-dark-800 border border-slate-700/60 rounded-xl p-5 shadow-sm">
-    <div class="border-b border-slate-700/60 pb-3 mb-4">
-      <h3 class="text-sm font-bold text-slate-100">Create New Database & User</h3>
-      <p class="text-xs text-slate-400 mt-0.5">Provision a dedicated SQL database with restricted user access</p>
+  <!-- Database Listing Card -->
+  <div class="bg-dark-800 border border-slate-700/60 rounded-xl overflow-hidden shadow-sm">
+    <!-- Header Filter Bar -->
+    <div class="p-4 border-b border-slate-700/60 bg-dark-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <h3 class="text-sm font-bold text-slate-100">Daftar Database Aktif</h3>
+        <span id="dbCountBadge" class="px-2 py-0.5 rounded-full text-[11px] font-mono bg-dark-900 border border-slate-700 text-slate-300">
+          {{len .Databases}} database
+        </span>
+      </div>
+      <div class="relative w-full sm:w-64">
+        <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+        <input type="text" id="dbSearchInput" oninput="filterDatabases()" placeholder="Cari nama situs / database..." class="w-full pl-9 pr-3 py-1.5 bg-dark-900 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+      </div>
     </div>
 
-    <form onsubmit="handleCreateDB(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Table Container -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-dark-900 border-b border-slate-700/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+          <tr>
+            <th class="px-4 py-3">Nama Situs</th>
+            <th class="px-4 py-3">Engine</th>
+            <th class="px-4 py-3">Nama Database</th>
+            <th class="px-4 py-3">User Database</th>
+            <th class="px-4 py-3">Ukuran</th>
+            <th class="px-4 py-3 text-right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="dbTableBody" class="divide-y divide-slate-700/40 text-slate-300">
+          {{if .Databases}}
+            {{range .Databases}}
+            <tr class="hover:bg-dark-750 transition-all db-row" data-search="{{.Site}} {{.Name}} {{.OwnerUser}} {{.Type}}">
+              <!-- Nama Situs -->
+              <td class="px-4 py-3 font-medium text-slate-200 whitespace-nowrap">
+                {{if and .Site (ne .Site "-")}}
+                  <a href="/sites" class="hover:text-sky-400 flex items-center gap-1.5 transition-all">
+                    <i data-lucide="globe" class="w-3.5 h-3.5 text-sky-400 flex-shrink-0"></i>
+                    <span class="font-mono text-xs">{{.Site}}</span>
+                  </a>
+                {{else}}
+                  <span class="text-slate-500 font-mono text-xs italic flex items-center gap-1.5">
+                    <i data-lucide="server" class="w-3.5 h-3.5 text-slate-600 flex-shrink-0"></i>
+                    <span>Standalone / Global</span>
+                  </span>
+                {{end}}
+              </td>
+
+              <!-- Engine -->
+              <td class="px-4 py-3 whitespace-nowrap">
+                {{if eq .Type "postgresql"}}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[11px] font-semibold">
+                    <i data-lucide="layers" class="w-3 h-3 text-indigo-400"></i>
+                    <span>PostgreSQL</span>
+                  </span>
+                {{else}}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
+                    <i data-lucide="database" class="w-3 h-3 text-amber-400"></i>
+                    <span>MariaDB</span>
+                  </span>
+                {{end}}
+              </td>
+
+              <!-- Nama Database -->
+              <td class="px-4 py-3 font-semibold text-slate-100 whitespace-nowrap">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-400"></i>
+                  <span class="font-mono text-xs text-indigo-200 select-all">{{.Name}}</span>
+                </div>
+              </td>
+
+              <!-- Database User -->
+              <td class="px-4 py-3 whitespace-nowrap">
+                <div class="flex items-center gap-1 text-slate-300 font-mono text-xs">
+                  <i data-lucide="user" class="w-3 h-3 text-slate-500"></i>
+                  <span>{{.OwnerUser}}</span>
+                  <span class="text-slate-600">@localhost</span>
+                </div>
+              </td>
+
+              <!-- Ukuran -->
+              <td class="px-4 py-3 font-mono text-slate-400 whitespace-nowrap text-xs">
+                {{if .Size}}{{.Size}}{{else}}-{{end}}
+              </td>
+
+              <!-- Aksi (Edit, Import, Export, Hapus) -->
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                <div class="inline-flex items-center gap-1.5 justify-end">
+                  <!-- Edit / Ubah Password -->
+                  <button type="button" onclick="openEditPasswordModal('{{.Type}}', '{{.Name}}', '{{.OwnerUser}}')" title="Ubah Password User Database" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-sky-400 border border-slate-700 transition-all cursor-pointer">
+                    <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                  </button>
+
+                  <!-- Import SQL -->
+                  <button type="button" onclick="openImportModal('{{.Type}}', '{{.Name}}')" title="Import File SQL ke Database Ini" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-emerald-400 border border-slate-700 transition-all cursor-pointer">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                  </button>
+
+                  <!-- Export SQL -->
+                  <a href="/api/databases/export?type={{.Type}}&database={{.Name}}" title="Download Backup SQL (Export)" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-amber-400 border border-slate-700 transition-all">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  </a>
+
+                  <!-- Hapus Database -->
+                  <button type="button" onclick="handleDeleteDB('{{.Type}}', '{{.Name}}', '{{.OwnerUser}}')" title="Hapus Database & User" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-rose-950/60 text-rose-400 border border-slate-700 hover:border-rose-800 transition-all cursor-pointer">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {{end}}
+          {{else}}
+            <tr id="emptyDBRow">
+              <td colspan="6" class="px-4 py-12 text-center text-slate-400">
+                <div class="flex flex-col items-center justify-center">
+                  <i data-lucide="database" class="w-10 h-10 text-slate-600 mb-2"></i>
+                  <p class="text-slate-300 text-xs font-semibold">Belum ada database yang dibuat</p>
+                  <p class="text-slate-500 text-[11px] mt-0.5">Klik tombol Tambah Database untuk membuat database MariaDB atau PostgreSQL</p>
+                  <button type="button" onclick="openCreateDBModal()" class="mt-3 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer shadow-sm">
+                    + Buat Database Sekarang
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL: CREATE DATABASE & USER -->
+<!-- ========================================== -->
+<div id="createDBModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(5, 8, 15, 0.85); backdrop-filter: blur(4px);">
+  <div class="w-full max-w-lg border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn" style="background-color: #0d1117;">
+    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between" style="background-color: #080c14;">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-indigo-400 bg-indigo-500/15">
+          <i data-lucide="database" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-slate-100">Buat Database & User Baru</h3>
+          <p class="text-[11px] text-slate-400">Database SQL terisolasi untuk aplikasi web Anda</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeModal('createDBModal')" class="text-slate-400 hover:text-slate-100 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form onsubmit="handleCreateDB(event)" class="p-5 space-y-4">
+      <!-- Engine Selector -->
       <div>
-        <label class="block text-xs font-medium text-slate-300 mb-1">Engine</label>
-        <select id="db_type" class="w-full bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500">
-          <option value="mariadb">MariaDB (MySQL)</option>
-          <option value="postgresql">PostgreSQL</option>
+        <label class="block text-xs font-medium text-slate-300 mb-1.5">Database Engine:</label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="flex items-center gap-2.5 p-2.5 border border-slate-700 rounded-lg cursor-pointer hover:border-indigo-500 transition-all" style="background-color: #080c14;">
+            <input type="radio" name="modal_db_type" value="mariadb" checked class="text-indigo-600 focus:ring-0">
+            <div>
+              <div class="text-xs font-semibold text-slate-100">MariaDB (MySQL)</div>
+              <div class="text-[10px] text-slate-400">Rekomendasi PHP / WordPress</div>
+            </div>
+          </label>
+          <label class="flex items-center gap-2.5 p-2.5 border border-slate-700 rounded-lg cursor-pointer hover:border-indigo-500 transition-all" style="background-color: #080c14;">
+            <input type="radio" name="modal_db_type" value="postgresql" class="text-indigo-600 focus:ring-0">
+            <div>
+              <div class="text-xs font-semibold text-slate-100">PostgreSQL 16</div>
+              <div class="text-[10px] text-slate-400">Database relasional enterprise</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Hubungkan dengan Situs -->
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Hubungkan ke Situs (Opsional):</label>
+        <select id="modal_db_site" onchange="onSiteSelectChange(this.value)" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 bg-dark-950 focus:outline-none focus:border-indigo-500" style="background-color: #080c14;">
+          <option value="">-- Standalone / Tidak Terhubung Situs Khusus --</option>
+          {{range .Sites}}
+            <option value="{{.Domain}}" data-user="{{.SystemUser}}">{{.Domain}} (User: {{.SystemUser}})</option>
+          {{end}}
         </select>
       </div>
+
+      <!-- Nama Database -->
       <div>
-        <label class="block text-xs font-medium text-slate-300 mb-1">Database Name</label>
-        <input type="text" id="db_name" required placeholder="app_db" class="w-full bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+        <label class="block text-xs font-medium text-slate-300 mb-1">Nama Database:</label>
+        <input type="text" id="modal_db_name" required placeholder="misal: web_db" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500" style="background-color: #080c14;">
       </div>
+
+      <!-- User Database -->
       <div>
-        <label class="block text-xs font-medium text-slate-300 mb-1">Database User</label>
-        <input type="text" id="db_user" required placeholder="app_user" class="w-full bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
+        <label class="block text-xs font-medium text-slate-300 mb-1">Database User:</label>
+        <input type="text" id="modal_db_user" required placeholder="misal: web_user" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500" style="background-color: #080c14;">
       </div>
+
+      <!-- User Password -->
       <div>
-        <label class="block text-xs font-medium text-slate-300 mb-1">User Password</label>
-        <div class="flex gap-2">
-          <input type="password" id="db_password" required placeholder="Strong Password" class="flex-1 bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono">
-          <button type="submit" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white whitespace-nowrap transition-all shadow-sm cursor-pointer">Create</button>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-medium text-slate-300">Password User:</label>
+          <button type="button" onclick="generateModalPassword()" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer">
+            + Acak Password
+          </button>
         </div>
+        <div class="relative">
+          <input type="text" id="modal_db_password" required placeholder="Password kuat" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500 pr-10" style="background-color: #080c14;">
+          <button type="button" onclick="copyPassword('modal_db_password')" title="Salin Password" class="absolute right-2 top-2 text-slate-400 hover:text-slate-200 cursor-pointer">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <button type="button" onclick="closeModal('createDBModal')" class="px-3.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 cursor-pointer">
+          Batal
+        </button>
+        <button type="submit" id="modal_db_submitBtn" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm cursor-pointer transition-all">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Buat Database</span>
+        </button>
       </div>
     </form>
   </div>
 </div>
 
+<!-- ========================================== -->
+<!-- MODAL: EDIT USER PASSWORD -->
+<!-- ========================================== -->
+<div id="editPasswordModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(5, 8, 15, 0.85); backdrop-filter: blur(4px);">
+  <div class="w-full max-w-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn" style="background-color: #0d1117;">
+    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between" style="background-color: #080c14;">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sky-400 bg-sky-500/15">
+          <i data-lucide="key" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-slate-100">Ubah Password User Database</h3>
+          <p id="editPassUserSubtitle" class="text-xs text-slate-400 font-mono mt-0.5"></p>
+        </div>
+      </div>
+      <button type="button" onclick="closeModal('editPasswordModal')" class="text-slate-400 hover:text-slate-100 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form onsubmit="handleUpdatePassword(event)" class="p-5 space-y-4">
+      <input type="hidden" id="edit_db_type">
+      <input type="hidden" id="edit_db_user">
+
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-medium text-slate-300">Password Baru:</label>
+          <button type="button" onclick="generateEditPassword()" class="text-[11px] text-sky-400 hover:text-sky-300 font-medium cursor-pointer">
+            + Acak Password
+          </button>
+        </div>
+        <div class="relative">
+          <input type="text" id="edit_db_newpass" required placeholder="Masukkan password baru" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500 pr-10" style="background-color: #080c14;">
+          <button type="button" onclick="copyPassword('edit_db_newpass')" title="Salin Password" class="absolute right-2 top-2 text-slate-400 hover:text-slate-200 cursor-pointer">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeModal('editPasswordModal')" class="px-3.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 cursor-pointer">
+          Batal
+        </button>
+        <button type="submit" id="editPassSubmitBtn" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow-sm cursor-pointer transition-all">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          <span>Simpan Password</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL: IMPORT SQL TO DATABASE -->
+<!-- ========================================== -->
+<div id="importDBModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(5, 8, 15, 0.85); backdrop-filter: blur(4px);">
+  <div class="w-full max-w-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn" style="background-color: #0d1117;">
+    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between" style="background-color: #080c14;">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400 bg-emerald-500/15">
+          <i data-lucide="upload" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-slate-100">Import Berkas SQL</h3>
+          <p id="importDBSubtitle" class="text-xs text-emerald-400 font-mono mt-0.5"></p>
+        </div>
+      </div>
+      <button type="button" onclick="closeModal('importDBModal')" class="text-slate-400 hover:text-slate-100 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form onsubmit="handleImportDB(event)" class="p-5 space-y-4">
+      <input type="hidden" id="import_db_type">
+      <input type="hidden" id="import_db_name">
+
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1.5">Pilih Berkas SQL:</label>
+        <input type="file" id="import_sql_file" accept=".sql,.gz" required class="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-dark-950 file:text-sky-400 hover:file:bg-slate-800 cursor-pointer border border-slate-700 rounded-lg p-1.5" style="background-color: #080c14;">
+        <p class="text-[11px] text-slate-500 mt-1">Mendukung berkas .sql (teks SQL) hingga 200 MB</p>
+      </div>
+
+      <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 inline mr-1"></i>
+        <span>Peringatan: Proses import akan mengeksekusi query dan menulis data langsung ke database target.</span>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeModal('importDBModal')" class="px-3.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 cursor-pointer">
+          Batal
+        </button>
+        <button type="submit" id="importSubmitBtn" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm cursor-pointer transition-all">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>Mulai Import</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL: TOOL INSTALLATION DIALOG (PMA/PGA) -->
+<!-- ========================================== -->
+<div id="toolSetupModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(5, 8, 15, 0.85); backdrop-filter: blur(4px);">
+  <div class="w-full max-w-md border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn" style="background-color: #0d1117;">
+    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between" style="background-color: #080c14;">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 bg-amber-500/15">
+          <i data-lucide="package" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 id="toolSetupTitle" class="text-sm font-bold text-slate-100">Instalasi Tools Database</h3>
+          <p class="text-[11px] text-slate-400">Pemasangan otomatis via FreeBSD Packages</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeModal('toolSetupModal')" class="text-slate-400 hover:text-slate-100 cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="p-5 space-y-4">
+      <p id="toolSetupMessage" class="text-xs text-slate-300 leading-relaxed"></p>
+
+      <div id="toolSetupLoading" class="hidden flex items-center gap-2 p-3 rounded-lg bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400">
+        <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin flex-shrink-0"></i>
+        <span>Mengunduh dan memasang paket FreeBSD pkg... Mohon tunggu sebentar.</span>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeModal('toolSetupModal')" class="px-3.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 cursor-pointer">
+          Batal
+        </button>
+        <button type="button" id="toolSetupBtn" onclick="executeInstallTool()" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm cursor-pointer transition-all">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Pasang Sekarang</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+let currentToolTarget = '';
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function openCreateDBModal() {
+  document.getElementById('modal_db_name').value = '';
+  document.getElementById('modal_db_user').value = '';
+  document.getElementById('modal_db_site').value = '';
+  generateModalPassword();
+  document.getElementById('createDBModal').classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function onSiteSelectChange(domain) {
+  if (!domain) return;
+  const select = document.getElementById('modal_db_site');
+  const option = select.options[select.selectedIndex];
+  const user = option.getAttribute('data-user') || domain.split('.')[0].replace(/-/g, '_');
+  const nameInput = document.getElementById('modal_db_name');
+  const userInput = document.getElementById('modal_db_user');
+  if (!nameInput.value || nameInput.value.endsWith('_db')) {
+    nameInput.value = user + '_db';
+  }
+  if (!userInput.value) {
+    userInput.value = user;
+  }
+}
+
+function generateModalPassword() {
+  document.getElementById('modal_db_password').value = generateRandomPass();
+}
+
+function generateEditPassword() {
+  document.getElementById('edit_db_newpass').value = generateRandomPass();
+}
+
+function generateRandomPass() {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+';
+  let pass = '';
+  for (let i = 0; i < 16; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
+
+function copyPassword(id) {
+  const input = document.getElementById(id);
+  if (!input.value) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(input.value).then(() => {
+      alert('Password disalin ke clipboard!');
+    }).catch(() => {
+      input.select();
+      document.execCommand('copy');
+      alert('Password disalin!');
+    });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    alert('Password disalin!');
+  }
+}
+
+function filterDatabases() {
+  const query = (document.getElementById('dbSearchInput').value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('.db-row');
+  let visible = 0;
+  rows.forEach(row => {
+    const text = (row.getAttribute('data-search') || '').toLowerCase();
+    if (!query || text.includes(query)) {
+      row.style.display = '';
+      visible++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+  const badge = document.getElementById('dbCountBadge');
+  if (badge) {
+    badge.textContent = `${visible} database`;
+  }
+}
+
 async function handleCreateDB(e) {
   e.preventDefault();
-  const payload = {
-    type: document.getElementById('db_type').value,
-    database: document.getElementById('db_name').value,
-    user: document.getElementById('db_user').value,
-    password: document.getElementById('db_password').value
-  };
+  const engine = document.querySelector('input[name="modal_db_type"]:checked').value;
+  const site = document.getElementById('modal_db_site').value;
+  const dbName = document.getElementById('modal_db_name').value.trim();
+  const dbUser = document.getElementById('modal_db_user').value.trim();
+  const dbPass = document.getElementById('modal_db_password').value;
+
+  const btn = document.getElementById('modal_db_submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Membuat Database...</span>`;
 
   try {
     const res = await fetch('/api/databases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        type: engine,
+        site: site,
+        database: dbName,
+        user: dbUser,
+        password: dbPass
+      })
     });
+
     if (res.ok) {
-      alert(`Database ${payload.database} and user ${payload.user} created successfully!`);
-      e.target.reset();
+      alert(`🎉 Database '${dbName}' (${engine}) berhasil dibuat!\n\nNama DB: ${dbName}\nUser DB: ${dbUser}\nPassword: ${dbPass}`);
+      closeModal('createDBModal');
+      window.location.reload();
     } else {
       const err = await res.text();
-      alert(`Failed to create database: ${err}`);
+      alert(`❌ Gagal membuat database: ${err}`);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="plus" class="w-3.5 h-3.5"></i><span>Buat Database</span>`;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+function openEditPasswordModal(type, dbName, user) {
+  document.getElementById('edit_db_type').value = type;
+  document.getElementById('edit_db_user').value = user;
+  document.getElementById('editPassUserSubtitle').textContent = `User: ${user} (Database: ${dbName})`;
+  generateEditPassword();
+  document.getElementById('editPasswordModal').classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+async function handleUpdatePassword(e) {
+  e.preventDefault();
+  const type = document.getElementById('edit_db_type').value;
+  const user = document.getElementById('edit_db_user').value;
+  const pass = document.getElementById('edit_db_newpass').value;
+
+  const btn = document.getElementById('editPassSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Menyimpan...</span>`;
+
+  try {
+    const res = await fetch('/api/databases/update-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, user, password: pass })
+    });
+    if (res.ok) {
+      alert(`🎉 Password untuk user database '${user}' berhasil diperbarui!\n\nPassword baru: ${pass}`);
+      closeModal('editPasswordModal');
+    } else {
+      const err = await res.text();
+      alert(`❌ Gagal memperbarui password: ${err}`);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i><span>Simpan Password</span>`;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+function openImportModal(type, dbName) {
+  document.getElementById('import_db_type').value = type;
+  document.getElementById('import_db_name').value = dbName;
+  document.getElementById('importDBSubtitle').textContent = `Database target: ${dbName} (${type})`;
+  document.getElementById('import_sql_file').value = '';
+  document.getElementById('importDBModal').classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+async function handleImportDB(e) {
+  e.preventDefault();
+  const type = document.getElementById('import_db_type').value;
+  const dbName = document.getElementById('import_db_name').value;
+  const fileInput = document.getElementById('import_sql_file');
+
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert('Pilih berkas SQL terlebih dahulu');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('type', type);
+  formData.append('database', dbName);
+  formData.append('file', fileInput.files[0]);
+
+  const btn = document.getElementById('importSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Mengimport SQL...</span>`;
+
+  try {
+    const res = await fetch('/api/databases/import', {
+      method: 'POST',
+      body: formData
+    });
+    if (res.ok) {
+      alert(`🎉 Berkas SQL berhasil di-import ke database '${dbName}'!`);
+      closeModal('importDBModal');
+      window.location.reload();
+    } else {
+      const err = await res.text();
+      alert(`❌ Gagal import SQL: ${err}`);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="upload" class="w-3.5 h-3.5"></i><span>Mulai Import</span>`;
+    if (window.renderLucideIcons) window.renderLucideIcons();
+  }
+}
+
+async function handleDeleteDB(type, dbName, user) {
+  if (!confirm(`⚠️ PERINGATAN:\n\nApakah Anda yakin ingin menghapus database '${dbName}' dan user '${user}' (${type})?\n\nSemua tabel dan data di dalam database ini akan DIHAPUS PERMANEN dan tidak dapat dikembalikan!`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/databases/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, database: dbName, user })
+    });
+    if (res.ok) {
+      alert(`Database '${dbName}' berhasil dihapus.`);
+      window.location.reload();
+    } else {
+      const err = await res.text();
+      alert(`Gagal menghapus database: ${err}`);
+    }
   } catch (err) {
     alert('Network error: ' + err);
   }
 }
 
+// ==========================================
+// ADMIN TOOLS (phpMyAdmin & phpPgAdmin)
+// ==========================================
+
+async function openTool(toolName) {
+  try {
+    const res = await fetch('/api/tools/status');
+    const data = await res.json();
+    const isInstalled = toolName === 'phpmyadmin' ? data.phpmyadmin_installed : data.phppgadmin_installed;
+
+    if (isInstalled) {
+      // Buka langsung di tab baru melalui proxy BSD Panel atau port web server
+      window.open(`/${toolName}/`, '_blank');
+    } else {
+      // Tampilkan modal konfirmasi instalasi
+      currentToolTarget = toolName;
+      const title = toolName === 'phpmyadmin' ? 'phpMyAdmin (MySQL/MariaDB GUI)' : 'phpPgAdmin (PostgreSQL GUI)';
+      document.getElementById('toolSetupTitle').textContent = `Pasang ${title}`;
+      document.getElementById('toolSetupMessage').innerHTML = `
+        Tool <strong>${title}</strong> belum terpasang di sistem FreeBSD Anda.<br><br>
+        BSD Panel dapat mengunduh dan memasangnya secara otomatis dari repositori resmi FreeBSD pkg. Setelah terpasang, konfigurasi web server dan blowfish secret akan langsung diaktifkan.
+      `;
+      document.getElementById('toolSetupLoading').classList.add('hidden');
+      document.getElementById('toolSetupBtn').disabled = false;
+      document.getElementById('toolSetupModal').classList.remove('hidden');
+      if (window.renderLucideIcons) window.renderLucideIcons();
+    }
+  } catch (err) {
+    window.open(`/${toolName}/`, '_blank');
+  }
+}
+
+async function executeInstallTool() {
+  if (!currentToolTarget) return;
+
+  const btn = document.getElementById('toolSetupBtn');
+  const loading = document.getElementById('toolSetupLoading');
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+
+  try {
+    const res = await fetch('/api/tools/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: currentToolTarget })
+    });
+
+    if (res.ok) {
+      alert(`🎉 ${currentToolTarget === 'phpmyadmin' ? 'phpMyAdmin' : 'phpPgAdmin'} berhasil dipasang dan dikonfigurasi! Halaman akan dibuka sekarang.`);
+      closeModal('toolSetupModal');
+      window.open(`/${currentToolTarget}/`, '_blank');
+    } else {
+      const err = await res.text();
+      alert(`❌ Gagal memasang tool: ${err}`);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  } finally {
+    btn.disabled = false;
+    loading.classList.add('hidden');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
-  const user = params.get('user');
   const site = params.get('site');
-  if (user) {
-    const dbNameInput = document.getElementById('db_name');
-    const dbUserInput = document.getElementById('db_user');
-    if (dbNameInput && !dbNameInput.value) {
-      dbNameInput.value = user + '_db';
+  const user = params.get('user');
+  const installTool = params.get('install_tool');
+
+  if (site || user) {
+    openCreateDBModal();
+    if (site) {
+      const select = document.getElementById('modal_db_site');
+      select.value = site;
+      onSiteSelectChange(site);
     }
-    if (dbUserInput && !dbUserInput.value) {
-      dbUserInput.value = user;
-    }
+  }
+
+  if (installTool) {
+    openTool(installTool);
   }
 });
 </script>

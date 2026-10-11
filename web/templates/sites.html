@@ -145,9 +145,9 @@
                   <a href="/files?path={{.DocumentRoot}}" title="File Manager ({{.DocumentRoot}})" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-amber-400 border border-slate-700 transition-all">
                     <i data-lucide="folder" class="w-3.5 h-3.5"></i>
                   </a>
-                  <a href="/databases?user={{.SystemUser}}&site={{.Domain}}" title="Kelola Database Situs ({{.Domain}})" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-indigo-400 border border-slate-700 transition-all">
+                  <button type="button" onclick="openCreateDBModalForSite('{{.Domain}}', '{{.SystemUser}}')" title="Buat & Hubungkan Database ({{.Domain}})" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-indigo-950/60 text-indigo-400 border border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer">
                     <i data-lucide="database" class="w-3.5 h-3.5"></i>
-                  </a>
+                  </button>
                   <button type="button" onclick="openEditSiteModal('{{.Domain}}', '{{.SystemUser}}', '{{.WebServer}}', '{{.PHPVersion}}', {{.SSLEnabled}}, {{.IsReverseProxy}}, '{{.ProxyUpstream}}')" title="Edit Pengaturan Situs" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-dark-900 hover:bg-dark-700 text-sky-400 border border-slate-700 transition-all cursor-pointer">
                     <i data-lucide="edit" class="w-3.5 h-3.5"></i>
                   </button>
@@ -307,8 +307,97 @@
         <pre id="logContentBox" class="flex-1 bg-dark-950 border border-slate-800 rounded-lg p-3 font-mono text-[11px] text-slate-300 overflow-y-auto whitespace-pre-wrap select-text leading-relaxed min-h-[300px]">Memuat log...</pre>
       </div>
     </div>
+  <!-- Create Database for Site Modal -->
+  <div id="createSiteDBModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(5, 8, 15, 0.85); backdrop-filter: blur(4px);">
+    <div class="w-full max-w-lg border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn" style="background-color: #0d1117;">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between" style="background-color: #080c14;">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-indigo-400 bg-indigo-500/15">
+            <i data-lucide="database" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-100">Buat Database untuk Situs</h3>
+            <p id="siteDBModalDomainBadge" class="text-xs text-sky-400 font-mono mt-0.5"></p>
+          </div>
+        </div>
+        <button type="button" onclick="closeCreateSiteDBModal()" class="text-slate-400 hover:text-slate-100 cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form onsubmit="submitCreateSiteDB(event)" class="p-5 space-y-4">
+        <input type="hidden" id="siteDB_domain">
+
+        <!-- Engine Selector -->
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Database Engine:</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2.5 p-2.5 border border-slate-700 rounded-lg cursor-pointer hover:border-indigo-500 transition-all" style="background-color: #080c14;">
+              <input type="radio" name="siteDB_engine" value="mariadb" checked class="text-indigo-600 focus:ring-0">
+              <div>
+                <div class="text-xs font-semibold text-slate-100">MariaDB (MySQL)</div>
+                <div class="text-[10px] text-slate-400">Rekomendasi PHP / MySQL</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2.5 p-2.5 border border-slate-700 rounded-lg cursor-pointer hover:border-indigo-500 transition-all" style="background-color: #080c14;">
+              <input type="radio" name="siteDB_engine" value="postgresql" class="text-indigo-600 focus:ring-0">
+              <div>
+                <div class="text-xs font-semibold text-slate-100">PostgreSQL 16</div>
+                <div class="text-[10px] text-slate-400">Database relasional enterprise</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Nama Database -->
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Nama Database:</label>
+          <input type="text" id="siteDB_name" required placeholder="nama_db" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500" style="background-color: #080c14;">
+          <p class="text-[11px] text-slate-500 mt-1">Gunakan huruf kecil, angka, dan garis bawah (_)</p>
+        </div>
+
+        <!-- Database User -->
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Database User:</label>
+          <input type="text" id="siteDB_user" required placeholder="user_db" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500" style="background-color: #080c14;">
+        </div>
+
+        <!-- Password & Generator -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-medium text-slate-300">Password User Database:</label>
+            <button type="button" onclick="generateSiteDBPassword()" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer">
+              + Acak Password
+            </button>
+          </div>
+          <div class="relative">
+            <input type="text" id="siteDB_password" required placeholder="Password kuat" class="w-full px-3 py-2 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500 pr-10" style="background-color: #080c14;">
+            <button type="button" onclick="copySiteDBPassword()" title="Salin Password" class="absolute right-2 top-2 text-slate-400 hover:text-slate-200 cursor-pointer">
+              <i data-lucide="copy" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+          <a id="siteDB_manageLink" href="/databases" class="text-xs text-slate-400 hover:text-indigo-400 transition-all flex items-center gap-1">
+            <span>Buka Menu Database</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </a>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="closeCreateSiteDBModal()" class="px-3.5 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-700 cursor-pointer">
+              Batal
+            </button>
+            <button type="submit" id="siteDB_submitBtn" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm cursor-pointer transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Buat Database</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
-</div>
 
 <script>
 let currentLogDomain = '';
@@ -514,6 +603,91 @@ async function handleIssueSSL(domain) {
       btn.disabled = false;
       if (window.renderLucideIcons) window.renderLucideIcons();
     }
+  }
+}
+function openCreateDBModalForSite(domain, user) {
+  document.getElementById('siteDB_domain').value = domain;
+  document.getElementById('siteDBModalDomainBadge').textContent = domain;
+  document.getElementById('siteDB_manageLink').href = `/databases?site=${encodeURIComponent(domain)}&user=${encodeURIComponent(user)}`;
+
+  const prefix = user || domain.split('.')[0].replace(/-/g, '_');
+  document.getElementById('siteDB_name').value = prefix + '_db';
+  document.getElementById('siteDB_user').value = prefix;
+  generateSiteDBPassword();
+
+  document.getElementById('createSiteDBModal').classList.remove('hidden');
+  if (window.renderLucideIcons) window.renderLucideIcons();
+}
+
+function closeCreateSiteDBModal() {
+  document.getElementById('createSiteDBModal').classList.add('hidden');
+}
+
+function generateSiteDBPassword() {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+';
+  let pass = '';
+  for (let i = 0; i < 16; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  document.getElementById('siteDB_password').value = pass;
+}
+
+function copySiteDBPassword() {
+  const input = document.getElementById('siteDB_password');
+  if (!input.value) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(input.value).then(() => {
+      alert('Password database disalin ke clipboard!');
+    }).catch(() => {
+      input.select();
+      document.execCommand('copy');
+      alert('Password database disalin ke clipboard!');
+    });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    alert('Password database disalin ke clipboard!');
+  }
+}
+
+async function submitCreateSiteDB(e) {
+  e.preventDefault();
+  const domain = document.getElementById('siteDB_domain').value;
+  const engine = document.querySelector('input[name="siteDB_engine"]:checked').value;
+  const dbName = document.getElementById('siteDB_name').value.trim();
+  const dbUser = document.getElementById('siteDB_user').value.trim();
+  const dbPass = document.getElementById('siteDB_password').value;
+
+  const btn = document.getElementById('siteDB_submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i><span>Membuat Database...</span>`;
+
+  try {
+    const res = await fetch('/api/databases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        site: domain,
+        type: engine,
+        database: dbName,
+        user: dbUser,
+        password: dbPass
+      })
+    });
+
+    if (res.ok) {
+      alert(`🎉 Database '${dbName}' (${engine}) berhasil dibuat untuk situs ${domain}!\n\nNama DB: ${dbName}\nUser DB: ${dbUser}\nPassword: ${dbPass}\n\nSilakan simpan konfigurasi ini pada aplikasi CMS / situs web Anda.`);
+      closeCreateSiteDBModal();
+    } else {
+      const err = await res.text();
+      alert(`❌ Gagal membuat database: ${err}`);
+    }
+  } catch (err) {
+    alert('Network error: ' + err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="plus" class="w-3.5 h-3.5"></i><span>Buat Database</span>`;
+    if (window.renderLucideIcons) window.renderLucideIcons();
   }
 }
 </script>

@@ -7,6 +7,8 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -200,6 +202,11 @@ func (s *Server) isServiceInstalled(ctx context.Context, item ServiceItem) bool 
 	return false
 }
 
+func (s *Server) isServiceRunning(ctx context.Context, serviceName string) bool {
+	st, err := s.serviceMgr.Status(ctx, serviceName)
+	return err == nil && st != nil && st.IsRunning
+}
+
 func (s *Server) getServicesCatalog(ctx context.Context) []ServiceItem {
 	items := []ServiceItem{
 		// Web Servers
@@ -327,11 +334,21 @@ func (s *Server) handleServicesPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "services.html", data)
 }
 
-// handleDatabasesPage renders database management view.
+// handleDatabasesPage renders database management view with sites and databases.
 func (s *Server) handleDatabasesPage(w http.ResponseWriter, r *http.Request) {
+	sitesList, _ := s.siteMgr.ListSites()
+	var domains []string
+	for _, site := range sitesList {
+		domains = append(domains, site.Domain)
+	}
+
+	databases, _ := s.dbMgr.ListDatabases(r.Context(), domains)
+
 	data := map[string]interface{}{
 		"Title":     "Database Management",
 		"ActiveNav": "databases",
+		"Sites":     sitesList,
+		"Databases": databases,
 	}
 	s.render(w, "databases.html", data)
 }
@@ -1097,25 +1114,50 @@ func (s *Server) handleAPIServiceUninstall(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// handleAPIDatabases handles DB operations.
+// handleAPIDatabases handles DB operations (GET list, POST create).
 func (s *Server) handleAPIDatabases(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodGet {
+		sitesList, _ := s.siteMgr.ListSites()
+		var domains []string
+		for _, site := range sitesList {
+			domains = append(domains, site.Domain)
+		}
+		databases, err := s.dbMgr.ListDatabases(r.Context(), domains)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   true,
+			"databases": databases,
+		})
+		return
+	}
+
 	if r.Method == http.MethodPost {
 		var req struct {
 			Type     string `json:"type"` // mariadb, postgresql
 			Database string `json:"database"`
 			User     string `json:"user"`
 			Password string `json:"password"`
+			Site     string `json:"site"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 
+		if req.Database == "" || req.User == "" || req.Password == "" {
+			http.Error(w, "nama database, user, dan password wajib diisi", http.StatusBadRequest)
+			return
+		}
+
 		var err error
 		if req.Type == "postgresql" {
-			err = s.dbMgr.CreatePostgreSQLDatabase(r.Context(), req.Database, req.User, req.Password)
+			err = s.dbMgr.CreatePostgreSQLDatabase(r.Context(), req.Database, req.User, req.Password, req.Site)
 		} else {
-			err = s.dbMgr.CreateMariaDBDatabase(r.Context(), req.Database, req.User, req.Password)
+			err = s.dbMgr.CreateMariaDBDatabase(r.Context(), req.Database, req.User, req.Password, req.Site)
 		}
 
 		if err != nil {
@@ -1123,12 +1165,323 @@ func (s *Server) handleAPIDatabases(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 		return
 	}
 
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleAPIDatabaseDelete drops a database and its user.
+func (s *Server) handleAPIDatabaseDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Type     string `json:"type"`
+		Database string `json:"database"`
+		User     string `json:"user"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.dbMgr.DropDatabase(r.Context(), req.Type, req.Database, req.User); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIDatabaseUpdatePassword changes user credentials.
+func (s *Server) handleAPIDatabaseUpdatePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Type     string `json:"type"`
+		User     string `json:"user"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if req.User == "" || req.Password == "" {
+		http.Error(w, "user dan password baru wajib diisi", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.dbMgr.UpdatePassword(r.Context(), req.Type, req.User, req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAPIDatabaseExport streams SQL dump to browser download.
+func (s *Server) handleAPIDatabaseExport(w http.ResponseWriter, r *http.Request) {
+	dbType := r.URL.Query().Get("type")
+	dbName := r.URL.Query().Get("database")
+	if dbName == "" {
+		http.Error(w, "nama database wajib diisi", http.StatusBadRequest)
+		return
+	}
+
+	filename := fmt.Sprintf("%s_%s_%s.sql", dbName, dbType, time.Now().Format("20060102_150405"))
+	w.Header().Set("Content-Type", "application/sql")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+	if err := s.dbMgr.ExportDatabase(r.Context(), dbType, dbName, w); err != nil {
+		http.Error(w, fmt.Sprintf("Gagal export database: %v", err), http.StatusInternalServerError)
+	}
+}
+
+// handleAPIDatabaseImport imports an uploaded SQL file into database.
+func (s *Server) handleAPIDatabaseImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseMultipartForm(200 << 20); err != nil {
+		http.Error(w, "Gagal membaca berkas: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	dbType := r.FormValue("type")
+	dbName := r.FormValue("database")
+	if dbName == "" {
+		http.Error(w, "nama database wajib diisi", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "berkas SQL wajib diunggah: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	if err := s.dbMgr.ImportDatabase(r.Context(), dbType, dbName, file); err != nil {
+		http.Error(w, fmt.Sprintf("Gagal import database: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// ensureAdminToolsConfigured provisions config.inc.php and web server routing for phpMyAdmin/phpPgAdmin.
+func (s *Server) ensureAdminToolsConfigured(ctx context.Context) error {
+	pmaDir := "/usr/local/www/phpMyAdmin"
+	if fi, err := os.Stat(pmaDir); err == nil && fi.IsDir() {
+		pmaConf := filepath.Join(pmaDir, "config.inc.php")
+		if _, err := os.Stat(pmaConf); os.IsNotExist(err) {
+			sampleConf := filepath.Join(pmaDir, "config.sample.inc.php")
+			content := `<?php
+$cfg['blowfish_secret'] = 'bsdpanel_pma_secret_key_32chars_long!';
+$i = 0;
+$i++;
+$cfg['Servers'][$i]['auth_type'] = 'cookie';
+$cfg['Servers'][$i]['host'] = 'localhost';
+$cfg['Servers'][$i]['compress'] = false;
+$cfg['Servers'][$i]['AllowNoPassword'] = false;
+$cfg['UploadDir'] = '';
+$cfg['SaveDir'] = '';
+`
+			if sampleData, err := os.ReadFile(sampleConf); err == nil {
+				cStr := string(sampleData)
+				cStr = strings.Replace(cStr, "$cfg['blowfish_secret'] = '';", "$cfg['blowfish_secret'] = 'bsdpanel_pma_secret_key_32chars_long!';", 1)
+				_ = os.WriteFile(pmaConf, []byte(cStr), 0644)
+			} else {
+				_ = os.WriteFile(pmaConf, []byte(content), 0644)
+			}
+		}
+	}
+
+	pgaDir := "/usr/local/www/phpPgAdmin"
+	if fi, err := os.Stat(pgaDir); err == nil && fi.IsDir() {
+		pgaConf := filepath.Join(pgaDir, "conf", "config.inc.php")
+		if _, err := os.Stat(pgaConf); os.IsNotExist(err) {
+			sampleConf := filepath.Join(pgaDir, "conf", "config.inc.php-dist")
+			if sampleData, err := os.ReadFile(sampleConf); err == nil {
+				cStr := string(sampleData)
+				cStr = strings.Replace(cStr, "$conf['extra_login_security'] = true;", "$conf['extra_login_security'] = false;", 1)
+				_ = os.WriteFile(pgaConf, []byte(cStr), 0644)
+			}
+		}
+	}
+
+	apacheIncludes := "/usr/local/etc/apache24/Includes"
+	if fi, err := os.Stat("/usr/local/etc/apache24"); err == nil && fi.IsDir() {
+		_ = os.MkdirAll(apacheIncludes, 0755)
+		apacheConf := `Alias /phpmyadmin "/usr/local/www/phpMyAdmin"
+<Directory "/usr/local/www/phpMyAdmin">
+    Options Indexes FollowSymLinks
+    DirectoryIndex index.php
+    AllowOverride All
+    Require all granted
+</Directory>
+
+Alias /phppgadmin "/usr/local/www/phpPgAdmin"
+<Directory "/usr/local/www/phpPgAdmin">
+    Options Indexes FollowSymLinks
+    DirectoryIndex index.php
+    AllowOverride All
+    Require all granted
+</Directory>
+`
+		_ = os.WriteFile(filepath.Join(apacheIncludes, "bsdpanel-tools.conf"), []byte(apacheConf), 0644)
+	}
+
+	nginxConfD := "/usr/local/etc/nginx/conf.d"
+	if fi, err := os.Stat("/usr/local/etc/nginx"); err == nil && fi.IsDir() {
+		_ = os.MkdirAll(nginxConfD, 0755)
+		nginxConf := `server {
+    listen 80;
+    server_name 127.0.0.1 localhost;
+
+    location /phpmyadmin {
+        alias /usr/local/www/phpMyAdmin;
+        index index.php;
+
+        location ~ \.php$ {
+            fastcgi_pass unix:/var/run/php-fpm.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $request_filename;
+            include fastcgi_params;
+        }
+    }
+
+    location /phppgadmin {
+        alias /usr/local/www/phpPgAdmin;
+        index index.php;
+
+        location ~ \.php$ {
+            fastcgi_pass unix:/var/run/php-fpm.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $request_filename;
+            include fastcgi_params;
+        }
+    }
+}
+`
+		_ = os.WriteFile(filepath.Join(nginxConfD, "00-tools.conf"), []byte(nginxConf), 0644)
+	}
+
+	return nil
+}
+
+// handleAPIToolsStatus returns installation status of phpMyAdmin and phpPgAdmin.
+func (s *Server) handleAPIToolsStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	pmaInstalled := false
+	if fi, err := os.Stat("/usr/local/www/phpMyAdmin"); err == nil && fi.IsDir() {
+		pmaInstalled = true
+	}
+
+	pgaInstalled := false
+	if fi, err := os.Stat("/usr/local/www/phpPgAdmin"); err == nil && fi.IsDir() {
+		pgaInstalled = true
+	}
+
+	port := 80
+	if s.isServiceRunning(r.Context(), "apache24") {
+		port = getApacheListenPort()
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"phpmyadmin_installed": pmaInstalled,
+		"phppgadmin_installed": pgaInstalled,
+		"webserver_port":       port,
+	})
+}
+
+// handleAPIToolsInstall installs phpMyAdmin or phpPgAdmin.
+func (s *Server) handleAPIToolsInstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Tool string `json:"tool"` // phpmyadmin, phppgadmin
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	var pkgs []string
+	if strings.EqualFold(req.Tool, "phpmyadmin") {
+		pkgs = []string{"phpMyAdmin5-php83"}
+	} else if strings.EqualFold(req.Tool, "phppgadmin") {
+		pkgs = []string{"phppgadmin-php83"}
+	} else {
+		http.Error(w, "invalid tool", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.pkgMgr.Install(r.Context(), pkgs...); err != nil {
+		http.Error(w, fmt.Sprintf("Gagal menginstall %s: %v", req.Tool, err), http.StatusInternalServerError)
+		return
+	}
+
+	_ = s.ensureAdminToolsConfigured(r.Context())
+	_ = s.serviceMgr.Reload(r.Context(), "nginx")
+	_ = s.serviceMgr.Reload(r.Context(), "apache24")
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handlePHPMyAdminProxy handles /phpmyadmin with proxy or friendly setup.
+func (s *Server) handlePHPMyAdminProxy(w http.ResponseWriter, r *http.Request) {
+	if fi, err := os.Stat("/usr/local/www/phpMyAdmin"); err != nil || !fi.IsDir() {
+		http.Redirect(w, r, "/databases?install_tool=phpmyadmin", http.StatusFound)
+		return
+	}
+
+	_ = s.ensureAdminToolsConfigured(r.Context())
+
+	port := 80
+	if s.isServiceRunning(r.Context(), "apache24") {
+		port = getApacheListenPort()
+	}
+
+	target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ServeHTTP(w, r)
+}
+
+// handlePHPPgAdminProxy handles /phppgadmin with proxy or friendly setup.
+func (s *Server) handlePHPPgAdminProxy(w http.ResponseWriter, r *http.Request) {
+	if fi, err := os.Stat("/usr/local/www/phpPgAdmin"); err != nil || !fi.IsDir() {
+		http.Redirect(w, r, "/databases?install_tool=phppgadmin", http.StatusFound)
+		return
+	}
+
+	_ = s.ensureAdminToolsConfigured(r.Context())
+
+	port := 80
+	if s.isServiceRunning(r.Context(), "apache24") {
+		port = getApacheListenPort()
+	}
+
+	target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ServeHTTP(w, r)
 }
 
 // handleAPIFirewall returns or applies firewall configuration.

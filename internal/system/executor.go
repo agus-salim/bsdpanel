@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"os/user"
 	"strconv"
@@ -73,6 +74,37 @@ func (e *Executor) Execute(ctx context.Context, command string, args ...string) 
 	}
 
 	return res, nil
+}
+
+// ExecuteWithStreams executes a command while streaming stdin and/or stdout.
+func (e *Executor) ExecuteWithStreams(ctx context.Context, stdin io.Reader, stdout io.Writer, command string, args ...string) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+	}
+
+	if e.UseDoas {
+		args = append([]string{command}, args...)
+		command = "/usr/local/bin/doas"
+	}
+
+	cmd := exec.CommandContext(ctx, command, args...)
+	if stdin != nil {
+		cmd.Stdin = stdin
+	}
+	if stdout != nil {
+		cmd.Stdout = stdout
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		return fmt.Errorf("command '%s' failed: %v (%s)", command, err, errMsg)
+	}
+	return nil
 }
 
 // ExecuteAsUser executes a command under a specific user if specified.

@@ -36,7 +36,7 @@ func main() {
 	pkgMgr := system.NewPkgManager(exec)
 	firewallMgr := system.NewFirewallManager(exec, serviceMgr)
 	siteMgr := sites.NewSiteManager(userMgr, serviceMgr, exec, cfg.DataDir)
-	dbMgr := database.NewDatabaseManager(exec)
+	dbMgr := database.NewDatabaseManager(exec, cfg.DataDir)
 	archiveMgr := system.NewArchiveManager(exec)
 
 	// Automatically ensure Nginx includes conf.d and synchronize all vhosts
