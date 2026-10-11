@@ -54,13 +54,17 @@ mkdir -p /var/log/bsdpanel
 mkdir -p /usr/local/www
 
 BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$BASE_DIR"
 
-# Build Rust backend
+# Build Rust backend (inside backend/ directory)
 if command -v cargo >/dev/null 2>&1; then
     echo -e "${YELLOW}Compiling Rust backend (bsdpaneld)...${NC}"
+    cd "$BASE_DIR/backend"
     cargo build --release
-    cp target/release/bsdpaneld /usr/local/sbin/bsdpaneld
+    if [ -f "target/release/bsdpaneld" ]; then
+        cp target/release/bsdpaneld /usr/local/sbin/bsdpaneld
+    elif [ -f "$BASE_DIR/target/release/bsdpaneld" ]; then
+        cp "$BASE_DIR/target/release/bsdpaneld" /usr/local/sbin/bsdpaneld
+    fi
     chmod +x /usr/local/sbin/bsdpaneld
 else
     echo -e "${RED}Cargo not found! Make sure package 'rust' is installed.${NC}"
