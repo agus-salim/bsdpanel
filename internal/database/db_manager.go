@@ -242,18 +242,45 @@ func (d *DatabaseManager) ListDatabases(ctx context.Context, knownSites []string
 	return result, nil
 }
 
+func (d *DatabaseManager) execPsql(ctx context.Context, sql string) error {
+	cmd := "/usr/local/bin/psql"
+	args := []string{"-U", "postgres", "-c", sql}
+	if d.exec.UseDoas {
+		args = append([]string{"-u", "postgres", cmd}, args...)
+		cmd = "/usr/local/bin/doas"
+	}
+	_, err := d.exec.Execute(ctx, cmd, args...)
+	return err
+}
+
+func (d *DatabaseManager) queryPsql(ctx context.Context, sql string) (string, error) {
+	cmd := "/usr/local/bin/psql"
+	args := []string{"-U", "postgres", "-t", "-A", "-c", sql}
+	if d.exec.UseDoas {
+		args = append([]string{"-u", "postgres", cmd}, args...)
+		cmd = "/usr/local/bin/doas"
+	}
+	res, err := d.exec.Execute(ctx, cmd, args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(res.Stdout), nil
+}
+
 // CreateMariaDBDatabase creates a database, dedicated user, and grants privileges.
 func (d *DatabaseManager) CreateMariaDBDatabase(ctx context.Context, dbName, dbUser, dbPass, siteDomain string) error {
 	if strings.ContainsAny(dbName, " ;'\"`\\") || strings.ContainsAny(dbUser, " ;'\"`\\") {
 		return fmt.Errorf("nama database atau user mengandung karakter tidak aman")
 	}
 
+	escapedPass := strings.ReplaceAll(dbPass, "'", "\\'")
 	sql := fmt.Sprintf(
 		"CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; "+
 			"CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s'; "+
+			"ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'; "+
 			"GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; "+
 			"FLUSH PRIVILEGES;",
-		dbName, dbUser, dbPass, dbName, dbUser,
+		dbName, dbUser, escapedPass, dbUser, escapedPass, dbName, dbUser,
 	)
 
 	cmd := "/usr/local/bin/mariadb"
@@ -287,26 +314,31 @@ func (d *DatabaseManager) CreatePostgreSQLDatabase(ctx context.Context, dbName, 
 		return fmt.Errorf("nama postgres database atau username mengandung karakter tidak aman")
 	}
 
-	sql := fmt.Sprintf(
-		"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE \"%s\" WITH LOGIN PASSWORD '%s'; ELSE ALTER ROLE \"%s\" WITH PASSWORD '%s'; END IF; END $$; "+
-			"SELECT 'CREATE DATABASE \"%s\" OWNER \"%s\"' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '%s')\\gexec\n"+
-			"GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";",
-		dbUser, dbUser, dbPass, dbUser, dbPass,
-		dbName, dbUser, dbName,
-		dbName, dbUser,
+	escapedPass := strings.ReplaceAll(dbPass, "'", "''")
+
+	// 1. Create or update user role with login password
+	roleSql := fmt.Sprintf(
+		"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE \"%s\" WITH LOGIN PASSWORD '%s'; ELSE ALTER ROLE \"%s\" WITH PASSWORD '%s'; END IF; END $$;",
+		dbUser, dbUser, escapedPass, dbUser, escapedPass,
 	)
-
-	cmd := "/usr/local/bin/psql"
-	args := []string{"-U", "postgres", "-c", sql}
-	if d.exec.UseDoas {
-		args = append([]string{"-u", "postgres", cmd}, args...)
-		cmd = "/usr/local/bin/doas"
+	if err := d.execPsql(ctx, roleSql); err != nil {
+		return fmt.Errorf("gagal membuat user PostgreSQL: %w", err)
 	}
 
-	_, err := d.exec.Execute(ctx, cmd, args...)
-	if err != nil {
-		return err
+	// 2. Check if database already exists
+	checkSql := fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname = '%s';", dbName)
+	exists, _ := d.queryPsql(ctx, checkSql)
+	if !strings.Contains(exists, "1") {
+		// Create database with owner
+		createSql := fmt.Sprintf("CREATE DATABASE \"%s\" OWNER \"%s\";", dbName, dbUser)
+		if err := d.execPsql(ctx, createSql); err != nil {
+			return fmt.Errorf("gagal membuat database PostgreSQL: %w", err)
+		}
 	}
+
+	// 3. Grant privileges
+	grantSql := fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";", dbName, dbUser)
+	_ = d.execPsql(ctx, grantSql)
 
 	_ = d.saveSingleRecord(DatabaseRecord{
 		Name:      dbName,
@@ -370,18 +402,13 @@ func (d *DatabaseManager) UpdatePassword(ctx context.Context, dbType, dbUser, ne
 	}
 
 	if strings.EqualFold(dbType, "postgresql") {
-		sql := fmt.Sprintf("ALTER ROLE \"%s\" WITH PASSWORD '%s';", dbUser, newPassword)
-		cmd := "/usr/local/bin/psql"
-		args := []string{"-U", "postgres", "-c", sql}
-		if d.exec.UseDoas {
-			args = append([]string{"-u", "postgres", cmd}, args...)
-			cmd = "/usr/local/bin/doas"
-		}
-		_, err := d.exec.Execute(ctx, cmd, args...)
-		return err
+		escapedPass := strings.ReplaceAll(newPassword, "'", "''")
+		sql := fmt.Sprintf("ALTER ROLE \"%s\" WITH PASSWORD '%s';", dbUser, escapedPass)
+		return d.execPsql(ctx, sql)
 	}
 
-	sql := fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'; FLUSH PRIVILEGES;", dbUser, newPassword)
+	escapedPass := strings.ReplaceAll(newPassword, "'", "\\'")
+	sql := fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'; FLUSH PRIVILEGES;", dbUser, escapedPass)
 	cmd := "/usr/local/bin/mariadb"
 	args := []string{"-u", "root", "-e", sql}
 	if d.exec.UseDoas {
