@@ -1,25 +1,16 @@
-# Rust build artifacts
-target/
-**/*.rs.bk
-Cargo.lock
+# Binaries
+*.exe
+bsdpanel.exe
+bsdpanel-freebsd
 
-# Node / Frontend build artifacts
-node_modules/
-frontend/node_modules/
-frontend/dist/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Environment & Secrets
-.env
-.env.local
+# Database & Runtime
+*.db
+*.db-wal
+*.db-shm
 *.log
-data/
 
-# IDE / OS files
+# Dependencies
+node_modules/
+dist/
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/

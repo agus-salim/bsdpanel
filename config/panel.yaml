@@ -1,0 +1,27 @@
+# BSDPanel Default Configuration for FreeBSD
+server:
+  host: "0.0.0.0"
+  port: 8083
+  tls:
+    enabled: false
+    cert_file: "/usr/local/etc/bsdpanel/ssl/cert.pem"
+    key_file: "/usr/local/etc/bsdpanel/ssl/key.pem"
+
+database:
+  driver: "sqlite"
+  dsn: "/var/db/bsdpanel/panel.db"
+
+freebsd:
+  zfs_pool: "zroot"
+  zfs_base_dataset: "zroot/bsdpanel"
+  jail_root: "/usr/jails"
+  default_web_srv: "nginx" # nginx, apache, openlitespeed
+  php_versions:
+    - "8.1"
+    - "8.2"
+    - "8.3"
+  pf_config_path: "/etc/pf.conf"
+
+auth:
+  jwt_secret: "ganti_dengan_secret_key_yang_sangat_aman_dan_acak_disini_32char"
+  token_expiration_hours: 24

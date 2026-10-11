@@ -6,6 +6,7 @@
 #
 # Add the following lines to /etc/rc.conf to enable bsdpanel:
 # bsdpanel_enable="YES"
+# bsdpanel_config="/usr/local/etc/bsdpanel/panel.yaml"
 #
 
 . /etc/rc.subr
@@ -16,52 +17,11 @@ rcvar="bsdpanel_enable"
 load_rc_config $name
 
 : ${bsdpanel_enable:="NO"}
+: ${bsdpanel_config:="/usr/local/etc/bsdpanel/panel.yaml"}
 : ${bsdpanel_user:="root"}
-: ${bsdpanel_config:="/usr/local/etc/bsdpanel/config.json"}
-: ${bsdpanel_log:="/var/log/bsdpanel/daemon.log"}
 
 pidfile="/var/run/${name}.pid"
-command="/usr/local/sbin/bsdpaneld"
-
-start_cmd="bsdpanel_start"
-stop_cmd="bsdpanel_stop"
-status_cmd="bsdpanel_status"
-
-bsdpanel_start() {
-    echo "Starting BSD Panel Daemon..."
-    if [ ! -d "/var/log/bsdpanel" ]; then
-        mkdir -p /var/log/bsdpanel
-    fi
-    if [ ! -x "${command}" ]; then
-        echo "Error: ${command} not found or not executable. Please compile first."
-        return 1
-    fi
-    /usr/sbin/daemon -cf -p ${pidfile} -o ${bsdpanel_log} ${command}
-    sleep 1
-    if [ -f "${pidfile}" ] && kill -0 `cat ${pidfile}` 2>/dev/null; then
-        echo "BSD Panel started successfully (PID `cat ${pidfile}`). Listening on port 8888."
-    else
-        echo "Error: BSD Panel failed to start. Check log file: ${bsdpanel_log}"
-    fi
-}
-
-bsdpanel_stop() {
-    echo "Stopping BSD Panel Daemon..."
-    if [ -f "${pidfile}" ]; then
-        kill `cat ${pidfile}` 2>/dev/null
-        rm -f ${pidfile}
-        echo "BSD Panel stopped."
-    else
-        echo "BSD Panel is not running."
-    fi
-}
-
-bsdpanel_status() {
-    if [ -f "${pidfile}" ] && kill -0 `cat ${pidfile}` 2>/dev/null; then
-        echo "BSD Panel is running as PID `cat ${pidfile}`"
-    else
-        echo "BSD Panel is not running"
-    fi
-}
+command="/usr/local/sbin/${name}"
+command_args="-config ${bsdpanel_config} > /var/log/${name}.log 2>&1 &"
 
 run_rc_command "$1"

@@ -1,7 +1,7 @@
 {
-  "name": "frontend",
+  "name": "bsdpanel-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,15 +9,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@iconify/vue": "^5.0.3",
-    "@lucide/vue": "^1.55.0",
-    "lucide-vue-next": "^1.0.0",
-    "pinia": "^4.0.3",
-    "vue": "^3.5.42",
-    "vue-router": "^5.4.0"
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0",
+    "pinia": "^2.1.7",
+    "lucide-vue-next": "^0.363.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.8",
-    "vite": "^8.3.0"
+    "@vitejs/plugin-vue": "^5.0.4",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.1.6"
   }
 }
