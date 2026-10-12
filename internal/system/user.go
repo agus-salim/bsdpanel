@@ -62,7 +62,7 @@ func (u *UserManager) CreateUser(username string) error {
 
 	// Ubah kepemilikan file di FreeBSD
 	_, _ = u.runner.ExecWithTimeout(5*time.Second, "chown", "-R", fmt.Sprintf("%s:www", username), homeDir)
-	_, _ = u.runner.ExecWithTimeout(5*time.Second, "chmod", "750", homeDir)
+	_, _ = u.runner.ExecWithTimeout(5*time.Second, "chmod", "755", homeDir)
 
 	return nil
 }

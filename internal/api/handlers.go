@@ -408,9 +408,10 @@ func (s *Server) handleAPIVHostCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simpan ke in-memory list
+	// Simpan ke in-memory list dan persistensi disk
 	s.vhostsMu.Lock()
 	s.vhostsList = append(s.vhostsList, vh)
+	s.saveVHosts()
 	s.vhostsMu.Unlock()
 
 	http.Redirect(w, r, "/vhosts?msg=Virtual+host+dan+folder+berhasil+dibuat!", http.StatusSeeOther)
@@ -419,12 +420,26 @@ func (s *Server) handleAPIVHostCreate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
 
-	if err := r.ParseForm(); err != nil {
-		s.respondSSL(w, r, isJSON, false, "Form data tidak valid")
+	_ = r.ParseForm()
+	_ = r.ParseMultipartForm(32 << 20)
+
+	domain := strings.TrimSpace(r.FormValue("domain"))
+	if domain == "" {
+		domain = strings.TrimSpace(r.URL.Query().Get("domain"))
+	}
+	if domain == "" && r.Body != nil {
+		var payload struct {
+			Domain string `json:"domain"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		domain = strings.TrimSpace(payload.Domain)
+	}
+
+	if domain == "" {
+		s.respondSSL(w, r, isJSON, false, "Nama domain tidak terdeteksi dalam permintaan")
 		return
 	}
 
-	domain := strings.TrimSpace(r.FormValue("domain"))
 	s.vhostsMu.Lock()
 	defer s.vhostsMu.Unlock()
 
@@ -433,6 +448,17 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 		if s.vhostsList[i].Domain == domain {
 			target = &s.vhostsList[i]
 			break
+		}
+	}
+
+	// Jika domain tidak ada di state in-memory, periksa apakah file konfigurasinya ada di disk
+	if target == nil {
+		confPath := filepath.Join(s.cfg.VHostDir, domain+".conf")
+		if confBytes, err := os.ReadFile(confPath); err == nil {
+			newVh := parseVHostFromConf(domain, string(confBytes))
+			s.vhostsList = append(s.vhostsList, newVh)
+			target = &s.vhostsList[len(s.vhostsList)-1]
+			s.saveVHosts()
 		}
 	}
 
@@ -446,6 +472,7 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		target.SSLEnabled = false
 		_ = s.vhostMgr.CreateOrUpdate(target)
+		s.saveVHosts()
 		s.respondSSL(w, r, isJSON, false, "Gagal menerbitkan Let's Encrypt: "+err.Error())
 		return
 	}
@@ -456,6 +483,7 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.saveVHosts()
 	s.respondSSL(w, r, isJSON, true, fmt.Sprintf("Sertifikat SSL Let's Encrypt untuk %s berhasil diterbitkan dan aktif!", domain))
 }
 
@@ -494,6 +522,7 @@ func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.vhostsList = filtered
+	s.saveVHosts()
 	s.vhostsMu.Unlock()
 
 	http.Redirect(w, r, "/vhosts?msg=Domain+berhasil+dihapus", http.StatusSeeOther)

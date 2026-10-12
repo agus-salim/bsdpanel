@@ -2,11 +2,16 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/agus-salim/bsdpanel/internal/auth"
 	"github.com/agus-salim/bsdpanel/internal/config"
@@ -71,11 +76,116 @@ func NewServer(
 		},
 	}
 
+	s.loadVHosts()
+
 	if err := s.initTemplates(); err != nil {
 		return nil, err
 	}
 
 	return s, nil
+}
+
+func (s *Server) loadVHosts() {
+	stateFile := filepath.Join(s.cfg.DataDir, "vhosts.json")
+	if data, err := os.ReadFile(stateFile); err == nil {
+		var list []webserver.VHostConfig
+		if err := json.Unmarshal(data, &list); err == nil && len(list) > 0 {
+			s.vhostsList = list
+		}
+	}
+
+	// Disk discovery: temukan virtual host yang sudah ada di disk
+	existingMap := make(map[string]bool)
+	for _, vh := range s.vhostsList {
+		existingMap[vh.Domain] = true
+	}
+
+	entries, err := os.ReadDir(s.cfg.VHostDir)
+	if err == nil {
+		updated := false
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".conf") {
+				continue
+			}
+			domain := strings.TrimSuffix(e.Name(), ".conf")
+			if domain == "" || existingMap[domain] {
+				continue
+			}
+
+			confBytes, err := os.ReadFile(filepath.Join(s.cfg.VHostDir, e.Name()))
+			if err != nil {
+				continue
+			}
+
+			vh := parseVHostFromConf(domain, string(confBytes))
+			s.vhostsList = append(s.vhostsList, vh)
+			existingMap[domain] = true
+			updated = true
+		}
+		if updated {
+			s.saveVHosts()
+		}
+	}
+}
+
+func parseVHostFromConf(domain, content string) webserver.VHostConfig {
+	vh := webserver.VHostConfig{
+		Domain:       domain,
+		User:         "www",
+		Webserver:    "nginx",
+		PHPVersion:   "php83",
+		DocumentRoot: "/home/" + domain + "/public_html",
+		CreatedAt:    time.Now().Format("2006-01-02"),
+	}
+
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "root ") && strings.HasSuffix(trimmed, ";") {
+			r := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(trimmed, ";"), "root "))
+			if r != "" {
+				vh.DocumentRoot = r
+			}
+		}
+		if strings.Contains(trimmed, "443 ssl") {
+			vh.SSLEnabled = true
+		}
+		if strings.Contains(trimmed, "fastcgi_pass unix:/var/run/") {
+			parts := strings.Split(trimmed, "/var/run/")
+			if len(parts) > 1 {
+				sockPart := strings.TrimSuffix(strings.TrimSpace(parts[1]), ";")
+				sockPart = strings.TrimSuffix(sockPart, ".sock")
+				subParts := strings.Split(sockPart, "-fpm-")
+				if len(subParts) == 2 {
+					vh.PHPVersion = subParts[0]
+					vh.User = subParts[1]
+				}
+			}
+		}
+	}
+
+	certPaths := []string{
+		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s/fullchain.pem", domain),
+		fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain),
+	}
+	for _, cp := range certPaths {
+		if _, err := os.Stat(cp); err == nil {
+			vh.SSLEnabled = true
+			vh.SSLCertPath = cp
+			break
+		}
+	}
+
+	return vh
+}
+
+func (s *Server) saveVHosts() {
+	_ = os.MkdirAll(s.cfg.DataDir, 0750)
+	stateFile := filepath.Join(s.cfg.DataDir, "vhosts.json")
+	data, err := json.MarshalIndent(s.vhostsList, "", "  ")
+	if err == nil {
+		_ = os.WriteFile(stateFile, data, 0644)
+	}
 }
 
 func (s *Server) initTemplates() error {

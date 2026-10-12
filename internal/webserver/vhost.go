@@ -187,6 +187,11 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 func (m *Manager) IssueSSL(domain, docRoot string) error {
 	docRoot = filepath.Clean(docRoot)
 
+	// Pastikan parent directory dan docRoot dapat diakses publik oleh Nginx (user www)
+	parentDir := filepath.Dir(docRoot)
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "755", parentDir)
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "755", docRoot)
+
 	// Pastikan direktori acme challenge ada dan dapat dibaca oleh publik
 	acmeDir := filepath.Join(docRoot, ".well-known", "acme-challenge")
 	_ = os.MkdirAll(acmeDir, 0755)
@@ -201,7 +206,7 @@ func (m *Manager) IssueSSL(domain, docRoot string) error {
 	}
 
 	// Jalankan Certbot resmi Let's Encrypt dengan webroot mode
-	res, err := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
+	res, _ := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
 		"--webroot",
 		"-w", docRoot,
 		"-d", domain,
@@ -226,8 +231,8 @@ func (m *Manager) IssueSSL(domain, docRoot string) error {
 	}
 
 	if foundCert == "" {
-		// Coba metode standalone jika webroot gagal
-		resNginx, errNginx := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
+		// Coba metode nginx plugin jika webroot belum membuahkan hasil
+		resNginx, _ := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
 			"--nginx",
 			"-d", domain,
 			"--non-interactive",
@@ -242,14 +247,17 @@ func (m *Manager) IssueSSL(domain, docRoot string) error {
 		}
 
 		if foundCert == "" {
-			errMsg := res.Stderr
+			errMsg := strings.TrimSpace(res.Stderr)
 			if errMsg == "" {
-				errMsg = res.Stdout
+				errMsg = strings.TrimSpace(res.Stdout)
 			}
-			if errMsg == "" && errNginx != nil {
-				errMsg = resNginx.Stderr
+			if errMsg == "" && resNginx.Stderr != "" {
+				errMsg = strings.TrimSpace(resNginx.Stderr)
 			}
-			return fmt.Errorf("Let's Encrypt gagal menerbitkan sertifikat untuk %s: %s (%w)", domain, errMsg, err)
+			if errMsg == "" {
+				errMsg = "Tidak ada berkas sertifikat yang dihasilkan oleh Certbot."
+			}
+			return fmt.Errorf("Certbot gagal menerbitkan sertifikat: %s", errMsg)
 		}
 	}
 

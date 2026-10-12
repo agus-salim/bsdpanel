@@ -13,6 +13,7 @@ function Build-FreeBSD {
         New-Item -ItemType Directory -Path "bin/freebsd_amd64" -Force | Out-Null
     }
     go build -ldflags="-s -w" -o bin/freebsd_amd64/bsdpanel ./cmd/bsdpanel
+    if ($LASTEXITCODE -ne 0) { throw "Build FreeBSD gagal" }
     $file = Get-Item "bin/freebsd_amd64/bsdpanel"
     Write-Host "==> Sukses: bin/freebsd_amd64/bsdpanel ($([math]::round($file.Length/1MB, 2)) MB)" -ForegroundColor Green
 }
@@ -26,6 +27,7 @@ function Build-Windows {
         New-Item -ItemType Directory -Path "bin" -Force | Out-Null
     }
     go build -ldflags="-s -w" -o bin/bsdpanel.exe ./cmd/bsdpanel
+    if ($LASTEXITCODE -ne 0) { throw "Build Windows gagal" }
     $file = Get-Item "bin/bsdpanel.exe"
     Write-Host "==> Sukses: bin/bsdpanel.exe ($([math]::round($file.Length/1MB, 2)) MB)" -ForegroundColor Green
 }
