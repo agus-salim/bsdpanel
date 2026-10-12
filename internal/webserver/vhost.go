@@ -194,7 +194,7 @@ func (m *Manager) IssueSSL(domain, docRoot string) error {
 
 	// Cek apakah certbot terpasang di FreeBSD; jika belum, otomatis install
 	if !fileExists("/usr/local/bin/certbot") {
-		_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "py311-certbot")
+		_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "py312-certbot", "py312-certbot-nginx")
 		if !fileExists("/usr/local/bin/certbot") {
 			_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "certbot")
 		}
