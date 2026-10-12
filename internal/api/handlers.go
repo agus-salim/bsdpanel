@@ -707,6 +707,78 @@ func (s *Server) respondSSL(w http.ResponseWriter, r *http.Request, isJSON, succ
 	}
 }
 
+func (s *Server) handleAPIVHostUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/vhosts?err=Form+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	domain := strings.TrimSpace(r.FormValue("domain"))
+	webserverType := strings.TrimSpace(r.FormValue("webserver"))
+	phpVer := strings.TrimSpace(r.FormValue("php_version"))
+
+	if domain == "" {
+		http.Redirect(w, r, "/vhosts?err=Nama+domain+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	if webserverType == "" {
+		webserverType = "nginx"
+	}
+
+	s.vhostsMu.Lock()
+	defer s.vhostsMu.Unlock()
+
+	var target *webserver.VHostConfig
+	for i := range s.vhostsList {
+		if s.vhostsList[i].Domain == domain {
+			target = &s.vhostsList[i]
+			break
+		}
+	}
+
+	// Jika domain tidak ada di state in-memory, periksa apakah file konfigurasinya ada di disk
+	if target == nil {
+		confPath := filepath.Join(s.cfg.VHostDir, domain+".conf")
+		if confBytes, err := os.ReadFile(confPath); err == nil {
+			newVh := s.parseVHostFromConf(domain, string(confBytes))
+			s.vhostsList = append(s.vhostsList, newVh)
+			target = &s.vhostsList[len(s.vhostsList)-1]
+		}
+	}
+
+	if target == nil {
+		http.Redirect(w, r, fmt.Sprintf("/vhosts?err=Domain+'%s'+tidak+ditemukan", domain), http.StatusSeeOther)
+		return
+	}
+
+	target.Webserver = webserverType
+	target.PHPVersion = phpVer
+
+	if phpVer != "" && phpVer != "none" {
+		target.HasPHP = true
+		target.PHPSocket = fmt.Sprintf("/var/run/%s-fpm-%s.sock", phpVer, target.User)
+		_ = s.phpMgr.CreateOrUpdatePool(php.PoolConfig{
+			User:              target.User,
+			PHPVersion:        phpVer,
+			MemoryLimit:       "256M",
+			UploadMaxFilesize: "64M",
+			MaxExecutionTime:  60,
+		})
+	} else {
+		target.HasPHP = false
+		target.PHPSocket = ""
+	}
+
+	if err := s.vhostMgr.CreateOrUpdate(target); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/vhosts?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	s.saveVHosts()
+	http.Redirect(w, r, "/vhosts?msg=Konfigurasi+web+server+dan+PHP+berhasil+diperbarui!", http.StatusSeeOther)
+}
+
 func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Form invalid", http.StatusBadRequest)
@@ -714,6 +786,13 @@ func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	domain := strings.TrimSpace(r.FormValue("domain"))
+	confirmText := strings.ToLower(strings.TrimSpace(r.FormValue("confirm")))
+
+	if confirmText != "konfirmasi" {
+		http.Redirect(w, r, "/vhosts?err=Penghapusan+dibatalkan:+Kata+konfirmasi+tidak+sesuai", http.StatusSeeOther)
+		return
+	}
+
 	_ = s.vhostMgr.Delete(domain)
 
 	s.vhostsMu.Lock()

@@ -90,6 +90,12 @@
                         </td>
                         <td class="p-3.5 font-mono text-slate-400 text-[11px]">{{.DocumentRoot}}</td>
                         <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                            <!-- Icon Edit Web Server & Versi PHP -->
+                            <button type="button" onclick="openEditVHostModal('{{.Domain}}', '{{.Webserver}}', '{{.PHPVersion}}')" title="Edit Web Server & Versi PHP"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded border border-slate-700 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+
                             <!-- Icon Database Situs -->
                             <button type="button" onclick="openDatabaseModal('{{.Domain}}', '{{.DBEngine}}', '{{.DBName}}', '{{.DBUser}}', '{{.DBPass}}')" title="Tautkan / Kelola Database Situs"
                                 class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-teal-300 rounded border border-slate-700 transition shadow-sm">
@@ -114,14 +120,11 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             </button>
 
-                            <!-- Hapus Domain -->
-                            <form method="POST" action="/api/vhosts/delete" onsubmit="return confirm('Hapus konfigurasi domain {{.Domain}}?')" class="inline">
-                                <input type="hidden" name="domain" value="{{.Domain}}">
-                                <button type="submit" title="Hapus Virtual Host"
-                                    class="inline-flex items-center justify-center px-2 py-1 text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
-                                    Hapus
-                                </button>
-                            </form>
+                            <!-- Hapus Domain (Icon Only, seragam) -->
+                            <button type="button" onclick="openDeleteVHostModal('{{.Domain}}')" title="Hapus Virtual Host"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 rounded border border-slate-700 hover:border-rose-500/40 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
                         </td>
                     </tr>
                     {{end}}
@@ -423,6 +426,96 @@
     </div>
 </div>
 
+<!-- Modal Edit Web Server & Versi PHP -->
+<div id="editVHostModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>✏️</span>
+                <span>Edit Konfigurasi Virtual Host</span>
+            </h3>
+            <button type="button" onclick="closeEditVHostModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <form method="POST" action="/api/vhosts/update" class="space-y-4 text-xs">
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Nama Domain</label>
+                <input type="text" name="domain" id="editVHostDomain" readonly
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none cursor-not-allowed">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Web Server</label>
+                <select name="webserver" id="editVHostWebserver" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+                    <option value="nginx">Nginx (Direkomendasikan)</option>
+                    <option value="apache24">Apache 2.4</option>
+                </select>
+                <p class="text-[11px] text-slate-500 mt-1">Konfigurasi reverse proxy / virtual host akan diperbarui otomatis.</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Versi PHP (Pool Terisolasi)</label>
+                <select name="php_version" id="editVHostPHPVersion" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+                    <option value="php83">PHP 8.3 (Terbaru)</option>
+                    <option value="php82">PHP 8.2</option>
+                    <option value="php81">PHP 8.1</option>
+                    <option value="none">Static (Tanpa PHP)</option>
+                </select>
+                <p class="text-[11px] text-slate-500 mt-1">Soket PHP-FPM pool user FreeBSD akan diarahkan ke versi runtime ini.</p>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeEditVHostModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Simpan Perubahan
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Konfirmasi Hapus Virtual Host Ketat -->
+<div id="deleteVHostModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-rose-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center space-x-3 text-rose-400 border-b border-slate-800 pb-3">
+            <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-xl shrink-0">
+                ⚠️
+            </div>
+            <div>
+                <h3 class="text-sm font-bold text-white">Konfirmasi Hapus Virtual Host</h3>
+                <p class="text-[11px] text-slate-400">Tindakan ini permanen dan tidak dapat dibatalkan</p>
+            </div>
+        </div>
+
+        <form method="POST" action="/api/vhosts/delete" class="space-y-4 text-xs">
+            <input type="hidden" name="domain" id="deleteModalDomainInput">
+
+            <div class="bg-rose-950/20 border border-rose-500/20 rounded-xl p-3.5 space-y-1.5">
+                <p class="text-slate-300">
+                    Anda akan menghapus konfigurasi virtual host domain:
+                </p>
+                <p class="font-mono font-bold text-rose-400 text-sm break-all" id="deleteModalDomainText">-</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1.5">
+                    Ketik <span class="font-mono text-rose-400 font-bold bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30 select-all">konfirmasi</span> untuk mengaktifkan tombol hapus:
+                </label>
+                <input type="text" name="confirm" id="deleteConfirmInput" oninput="checkDeleteConfirm()" autocomplete="off" placeholder="ketik 'konfirmasi'..."
+                    class="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-lg px-3 py-2 text-white font-mono placeholder-slate-600 focus:outline-none transition">
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeDeleteVHostModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" id="btnSubmitDelete" disabled
+                    class="px-4 py-2 bg-slate-800 text-slate-500 cursor-not-allowed font-semibold rounded-lg transition">
+                    Hapus Virtual Host
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Script AJAX Pemanggilan SSL dengan Animasi Loading -->
 <script>
 let timerInterval = null;
@@ -633,6 +726,50 @@ async function issueSSL(domain) {
         loadingState.classList.add('hidden');
         errorState.classList.remove('hidden');
         errorMsg.textContent = 'Gagal berkomunikasi dengan server BSDPanel: ' + err.message;
+    }
+}
+
+function openEditVHostModal(domain, webserver, phpVersion) {
+    document.getElementById('editVHostDomain').value = domain || '';
+    document.getElementById('editVHostWebserver').value = webserver || 'nginx';
+    document.getElementById('editVHostPHPVersion').value = phpVersion || 'php83';
+    document.getElementById('editVHostModal').classList.remove('hidden');
+}
+
+function closeEditVHostModal() {
+    document.getElementById('editVHostModal').classList.add('hidden');
+}
+
+function openDeleteVHostModal(domain) {
+    document.getElementById('deleteModalDomainInput').value = domain || '';
+    document.getElementById('deleteModalDomainText').textContent = domain || '';
+    const input = document.getElementById('deleteConfirmInput');
+    if (input) {
+        input.value = '';
+    }
+    checkDeleteConfirm();
+    document.getElementById('deleteVHostModal').classList.remove('hidden');
+    setTimeout(() => {
+        if (input) input.focus();
+    }, 100);
+}
+
+function closeDeleteVHostModal() {
+    document.getElementById('deleteVHostModal').classList.add('hidden');
+}
+
+function checkDeleteConfirm() {
+    const input = document.getElementById('deleteConfirmInput');
+    const val = input ? (input.value || '').trim().toLowerCase() : '';
+    const btn = document.getElementById('btnSubmitDelete');
+    if (btn) {
+        if (val === 'konfirmasi') {
+            btn.disabled = false;
+            btn.className = 'px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg transition shadow-md shadow-rose-950/50 cursor-pointer';
+        } else {
+            btn.disabled = true;
+            btn.className = 'px-4 py-2 bg-slate-800 text-slate-500 cursor-not-allowed font-semibold rounded-lg transition';
+        }
     }
 }
 </script>

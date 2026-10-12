@@ -249,6 +249,7 @@ func (s *Server) SetupRouter() http.Handler {
 	// REST / Form Action APIs
 	mux.HandleFunc("GET /api/stats", s.handleAPIStats)
 	mux.HandleFunc("POST /api/vhosts/create", s.handleAPIVHostCreate)
+	mux.HandleFunc("POST /api/vhosts/update", s.handleAPIVHostUpdate)
 	mux.HandleFunc("POST /api/vhosts/delete", s.handleAPIVHostDelete)
 	mux.HandleFunc("POST /api/vhosts/ssl", s.handleVHostSSL)
 	mux.HandleFunc("GET /api/vhosts/logs", s.handleVHostLogs)
