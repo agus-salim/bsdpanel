@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agus-salim/bsdpanel/internal/archiver"
 	"github.com/agus-salim/bsdpanel/internal/auth"
 	"github.com/agus-salim/bsdpanel/internal/database"
 	"github.com/agus-salim/bsdpanel/internal/php"
@@ -40,11 +41,12 @@ type PageData struct {
 }
 
 type FileInfo struct {
-	Name    string
-	IsDir   bool
-	SizeStr string
-	Mode    string
-	ModTime string
+	Name      string
+	IsDir     bool
+	SizeStr   string
+	Mode      string
+	ModTime   string
+	IsArchive bool
 }
 
 func (s *Server) getUsername(r *http.Request) string {
@@ -214,12 +216,20 @@ func (s *Server) handleFilesPage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		sizeStr := formatFileSize(info.Size())
+		lowerName := strings.ToLower(entry.Name())
+		isArch := !entry.IsDir() && (strings.HasSuffix(lowerName, ".zip") ||
+			strings.HasSuffix(lowerName, ".tar.gz") ||
+			strings.HasSuffix(lowerName, ".tgz") ||
+			strings.HasSuffix(lowerName, ".tar") ||
+			strings.HasSuffix(lowerName, ".gz"))
+
 		files = append(files, FileInfo{
-			Name:    entry.Name(),
-			IsDir:   entry.IsDir(),
-			SizeStr: sizeStr,
-			Mode:    info.Mode().String(),
-			ModTime: info.ModTime().Format("02 Jan 15:04"),
+			Name:      entry.Name(),
+			IsDir:     entry.IsDir(),
+			SizeStr:   sizeStr,
+			Mode:      info.Mode().String(),
+			ModTime:   info.ModTime().Format("02 Jan 15:04"),
+			IsArchive: isArch,
 		})
 	}
 
@@ -309,6 +319,199 @@ func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 	parent := filepath.Dir(path)
 	_ = os.RemoveAll(path)
 	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=Dihapus+berhasil", parent), http.StatusSeeOther)
+}
+
+func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
+
+	if err := r.ParseMultipartForm(512 << 20); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Gagal memproses file upload: " + err.Error()})
+			return
+		}
+		http.Redirect(w, r, "/files?err=Gagal+memproses+upload", http.StatusSeeOther)
+		return
+	}
+
+	dir := filepath.Clean(r.FormValue("dir"))
+	if dir == "" || dir == "." {
+		dir = "/home"
+	}
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Direktori tujuan tidak valid: " + err.Error()})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Direktori+tujuan+tidak+valid", dir), http.StatusSeeOther)
+		return
+	}
+
+	var uploadedFiles []string
+	if r.MultipartForm != nil && r.MultipartForm.File != nil {
+		for _, headers := range r.MultipartForm.File {
+			for _, fileHeader := range headers {
+				srcFile, err := fileHeader.Open()
+				if err != nil {
+					continue
+				}
+
+				safeName := filepath.Base(fileHeader.Filename)
+				targetPath := filepath.Join(dir, safeName)
+
+				destFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+				if err != nil {
+					srcFile.Close()
+					continue
+				}
+
+				_, copyErr := io.Copy(destFile, srcFile)
+				srcFile.Close()
+				destFile.Close()
+
+				if copyErr == nil {
+					uploadedFiles = append(uploadedFiles, safeName)
+				}
+			}
+		}
+	}
+
+	if len(uploadedFiles) == 0 {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Tidak ada berkas yang berhasil diunggah"})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Tidak+ada+berkas+yang+diunggah", dir), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("%d berkas berhasil diunggah!", len(uploadedFiles))
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": msg,
+			"files":   uploadedFiles,
+		})
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=%s", dir, url.QueryEscape(msg)), http.StatusSeeOther)
+}
+
+func (s *Server) handleFileCompress(w http.ResponseWriter, r *http.Request) {
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
+	if err := r.ParseForm(); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Form tidak valid"})
+			return
+		}
+		http.Redirect(w, r, "/files?err=Form+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	sourcePath := filepath.Clean(r.FormValue("path"))
+	format := strings.ToLower(strings.TrimSpace(r.FormValue("format")))
+	if format == "" {
+		format = "zip"
+	}
+
+	customName := strings.TrimSpace(r.FormValue("archive_name"))
+	dir := filepath.Dir(sourcePath)
+	base := filepath.Base(sourcePath)
+
+	var archiveName string
+	if customName != "" {
+		archiveName = customName
+		if format == "zip" && !strings.HasSuffix(strings.ToLower(archiveName), ".zip") {
+			archiveName += ".zip"
+		} else if (format == "tar.gz" || format == "tgz") && !strings.HasSuffix(strings.ToLower(archiveName), ".tar.gz") {
+			archiveName += ".tar.gz"
+		}
+	} else {
+		if format == "zip" {
+			archiveName = base + ".zip"
+		} else {
+			archiveName = base + ".tar.gz"
+		}
+	}
+
+	destPath := filepath.Join(dir, archiveName)
+	if err := archiver.Compress(sourcePath, destPath, format); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Gagal mengompres: " + err.Error()})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=%s", dir, url.QueryEscape("Gagal kompres: "+err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Arsip %s berhasil dibuat!", archiveName)
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": msg,
+			"archive": archiveName,
+		})
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=%s", dir, url.QueryEscape(msg)), http.StatusSeeOther)
+}
+
+func (s *Server) handleFileExtract(w http.ResponseWriter, r *http.Request) {
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
+	if err := r.ParseForm(); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Form tidak valid"})
+			return
+		}
+		http.Redirect(w, r, "/files?err=Form+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	archivePath := filepath.Clean(r.FormValue("path"))
+	destDir := strings.TrimSpace(r.FormValue("destination"))
+	if destDir == "" {
+		destDir = filepath.Dir(archivePath)
+	} else {
+		destDir = filepath.Clean(destDir)
+	}
+
+	if err := archiver.Extract(archivePath, destDir); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Gagal mengekstrak: " + err.Error()})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=%s", destDir, url.QueryEscape("Gagal ekstrak: "+err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Arsip %s berhasil diekstrak ke %s!", filepath.Base(archivePath), destDir)
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":     true,
+			"message":     msg,
+			"destination": destDir,
+		})
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=%s", destDir, url.QueryEscape(msg)), http.StatusSeeOther)
 }
 
 func formatFileSize(bytes int64) string {

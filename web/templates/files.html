@@ -1,5 +1,5 @@
 {{define "content"}}
-<div class="space-y-6">
+<div class="space-y-6" id="fileManagerApp">
 
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -8,31 +8,49 @@
                 <span>File Manager</span>
             </h3>
             <p class="text-xs text-slate-400 mt-1 font-mono">
-                Jalur: <span class="text-emerald-400 font-semibold">{{.CurrentPath}}</span>
+                Jalur: <span class="text-emerald-400 font-semibold" id="currentDirPath">{{.CurrentPath}}</span>
             </p>
         </div>
-        <div class="flex items-center space-x-2">
+        <div class="flex flex-wrap items-center gap-2">
             {{if .ParentPath}}
-            <a href="/files?path={{.ParentPath}}" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1.5">
+            <a href="/files?path={{.ParentPath}}" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1.5 shadow-sm">
                 <span>⬆️ Ke Induk</span>
             </a>
             {{end}}
-            <button onclick="document.getElementById('newFileModal').classList.remove('hidden')" class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition shadow-sm">
-                + Berkas Baru
+
+            <!-- Tombol Upload File -->
+            <button type="button" onclick="document.getElementById('fileUploadInput').click()" class="px-3 py-1.5 text-xs bg-teal-600/90 hover:bg-teal-500 text-white font-medium rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span>Unggah Berkas</span>
+            </button>
+            <input type="file" id="fileUploadInput" multiple class="hidden" onchange="handleFileSelect(this.files)">
+
+            <!-- Tombol Berkas Baru -->
+            <button type="button" onclick="document.getElementById('newFileModal').classList.remove('hidden')" class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                <span>+ Berkas Baru</span>
             </button>
         </div>
     </div>
 
     {{if .FlashSuccess}}
-    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-xs text-emerald-400">
-        {{.FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-xs text-emerald-400 flex items-center space-x-2">
+        <span>✓</span>
+        <span>{{.FlashSuccess}}</span>
     </div>
     {{end}}
     {{if .FlashError}}
-    <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-xs text-rose-400">
-        {{.FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-xs text-rose-400 flex items-center space-x-2">
+        <span>✕</span>
+        <span>{{.FlashError}}</span>
     </div>
     {{end}}
+
+    <!-- Area Dropzone Petunjuk Drag & Drop -->
+    <div id="dropBanner" class="p-3 bg-slate-900/60 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-center text-xs text-slate-400 transition cursor-pointer flex items-center justify-center space-x-2"
+        onclick="document.getElementById('fileUploadInput').click()">
+        <span class="text-base">📥</span>
+        <span>Tarik dan lepaskan berkas di sini untuk mengunggah secara otomatis, atau klik untuk memilih berkas.</span>
+    </div>
 
     <!-- Tabel Berkas -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
@@ -52,27 +70,49 @@
                     <tr class="hover:bg-slate-800/40 transition">
                         <td class="p-3.5 flex items-center space-x-2">
                             {{if .IsDir}}
-                            <span class="text-amber-400">📁</span>
+                            <span class="text-amber-400 text-sm">📁</span>
                             <a href="/files?path={{$.CurrentPath}}/{{.Name}}" class="font-semibold text-emerald-400 hover:underline">
                                 {{.Name}}
                             </a>
                             {{else}}
-                            <span class="text-slate-400">📄</span>
+                            {{if .IsArchive}}
+                            <span class="text-amber-300 text-sm">📦</span>
+                            <span class="text-amber-300 font-semibold">{{.Name}}</span>
+                            {{else}}
+                            <span class="text-slate-400 text-sm">📄</span>
                             <span class="text-slate-200">{{.Name}}</span>
+                            {{end}}
                             {{end}}
                         </td>
                         <td class="p-3.5 text-slate-400">{{if .IsDir}}-{{else}}{{.SizeStr}}{{end}}</td>
                         <td class="p-3.5 text-slate-400">{{.Mode}}</td>
                         <td class="p-3.5 text-slate-500">{{.ModTime}}</td>
-                        <td class="p-3.5 text-right space-x-2">
+                        <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                            <!-- Ekstrak jika berkas arsip (zip / tar.gz / tgz / tar) -->
+                            {{if .IsArchive}}
+                            <button type="button" onclick="openExtractModal('{{$.CurrentPath}}/{{.Name}}', '{{.Name}}')" title="Ekstrak Arsip"
+                                class="inline-flex items-center px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded border border-amber-500/30 transition text-[11px]">
+                                <span>📂 Ekstrak</span>
+                            </button>
+                            {{end}}
+
+                            <!-- Kompres Berkas / Folder -->
+                            <button type="button" onclick="openCompressModal('{{$.CurrentPath}}/{{.Name}}', '{{.Name}}', {{.IsDir}})" title="Kompres Berkas/Folder"
+                                class="inline-flex items-center px-2 py-1 bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-teal-300 rounded border border-slate-700 transition text-[11px]">
+                                <span>📦 Kompres</span>
+                            </button>
+
+                            <!-- Edit Berkas Teks -->
                             {{if not .IsDir}}
-                            <a href="/files/edit?path={{$.CurrentPath}}/{{.Name}}" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition">
+                            <a href="/files/edit?path={{$.CurrentPath}}/{{.Name}}" class="inline-flex items-center px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition text-[11px]">
                                 Edit
                             </a>
                             {{end}}
+
+                            <!-- Hapus -->
                             <form method="POST" action="/api/files/delete" onsubmit="return confirm('Hapus {{.Name}}?')" class="inline">
                                 <input type="hidden" name="path" value="{{$.CurrentPath}}/{{.Name}}">
-                                <button type="submit" class="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
+                                <button type="submit" class="inline-flex items-center px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition text-[11px]">
                                     Hapus
                                 </button>
                             </form>
@@ -81,7 +121,7 @@
                     {{else}}
                     <tr>
                         <td colspan="5" class="p-8 text-center text-slate-500">
-                            Direktori ini kosong.
+                            Direktori ini kosong. Tarik berkas ke area ini untuk mengunggah.
                         </td>
                     </tr>
                     {{end}}
@@ -90,33 +130,320 @@
         </div>
     </div>
 
-    <!-- Modal Buat File Baru -->
-    <div id="newFileModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 class="text-sm font-bold text-white">Buat Berkas / Folder Baru</h3>
-                <button onclick="document.getElementById('newFileModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <form method="POST" action="/api/files/create" class="space-y-4 text-xs">
-                <input type="hidden" name="dir" value="{{.CurrentPath}}">
-                <div>
-                    <label class="block text-slate-300 font-semibold mb-1">Nama</label>
-                    <input type="text" name="name" required placeholder="index.php atau assets" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
-                </div>
-                <div>
-                    <label class="block text-slate-300 font-semibold mb-1">Tipe</label>
-                    <select name="type" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
-                        <option value="file">Berkas (File)</option>
-                        <option value="dir">Direktori (Folder)</option>
-                    </select>
-                </div>
-                <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
-                    <button type="button" onclick="document.getElementById('newFileModal').classList.add('hidden')" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg">Buat</button>
-                </div>
-            </form>
+</div>
+{{end}}
+
+{{define "modals"}}
+<!-- Overlay Visual Drag and Drop -->
+<div id="dragDropOverlay" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-emerald-500/60 p-8 transition-all pointer-events-none">
+    <div class="text-center space-y-4">
+        <div class="w-20 h-20 mx-auto rounded-3xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 animate-bounce shadow-xl shadow-emerald-500/20 text-4xl">
+            📥
+        </div>
+        <h3 class="text-xl font-bold text-white tracking-tight">Lepaskan Berkas di Sini</h3>
+        <p class="text-xs text-slate-400 font-mono">Mengunggah ke direktori: <span class="text-emerald-400 font-bold">{{.CurrentPath}}</span></p>
+        <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+            <span>⚡ Otomatis Mengunggah Multi-Berkas</span>
         </div>
     </div>
-
 </div>
+
+<!-- Modal Progress Upload Interaktif -->
+<div id="uploadProgressModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 overflow-hidden">
+        <!-- Glow top bar -->
+        <div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 animate-pulse"></div>
+
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span class="animate-spin">⏳</span>
+                <span>Mengunggah Berkas</span>
+            </h3>
+            <span id="uploadPercent" class="text-xs font-mono font-bold text-emerald-400">0%</span>
+        </div>
+
+        <div class="space-y-3">
+            <div>
+                <p id="uploadFileName" class="text-xs font-mono text-slate-300 truncate">Menyiapkan berkas...</p>
+                <p id="uploadSpeedInfo" class="text-[11px] text-slate-500 font-mono mt-0.5">0 B / 0 B</p>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-950 rounded-full h-3 p-0.5 border border-slate-800 overflow-hidden">
+                <div id="uploadProgressBar" class="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 transition-all duration-200" style="width: 0%"></div>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span id="uploadStatusText">Sedang mentransfer...</span>
+                <span class="text-[10px] text-slate-500">Mohon jangan tutup jendela</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Buat File Baru -->
+<div id="newFileModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>📄</span>
+                <span>Buat Berkas / Folder Baru</span>
+            </h3>
+            <button onclick="document.getElementById('newFileModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="/api/files/create" class="space-y-4 text-xs">
+            <input type="hidden" name="dir" value="{{.CurrentPath}}">
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Nama</label>
+                <input type="text" name="name" required placeholder="index.php atau assets" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Tipe</label>
+                <select name="type" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                    <option value="file">Berkas (File)</option>
+                    <option value="dir">Direktori (Folder)</option>
+                </select>
+            </div>
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('newFileModal').classList.add('hidden')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">Buat</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Kompres Berkas / Folder -->
+<div id="compressModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>📦</span>
+                <span>Kompres Berkas / Folder</span>
+            </h3>
+            <button type="button" onclick="closeCompressModal()" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="/api/files/compress" class="space-y-4 text-xs">
+            <input type="hidden" name="path" id="compressSourcePath">
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <p class="text-[11px] text-slate-400">Target yang akan dikompres:</p>
+                <p class="font-mono font-bold text-emerald-400 text-sm mt-0.5 truncate" id="compressTargetName">-</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Format Arsip</label>
+                <select name="format" id="compressFormatSelect" onchange="updateCompressExt()"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                    <option value="zip">ZIP Archive (.zip) - Universal</option>
+                    <option value="tar.gz">TAR GZ Archive (.tar.gz) - Standar Unix/FreeBSD</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Nama Berkas Arsip</label>
+                <input type="text" name="archive_name" id="compressArchiveName" required placeholder="archive.zip"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeCompressModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Mulai Kompres
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Ekstrak Arsip -->
+<div id="extractModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>📂</span>
+                <span>Ekstrak Berkas Arsip</span>
+            </h3>
+            <button type="button" onclick="closeExtractModal()" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="/api/files/extract" class="space-y-4 text-xs">
+            <input type="hidden" name="path" id="extractSourcePath">
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <p class="text-[11px] text-slate-400">Berkas Arsip:</p>
+                <p class="font-mono font-bold text-amber-400 text-sm mt-0.5 truncate" id="extractArchiveName">-</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Direktori Tujuan Ekstrak</label>
+                <input type="text" name="destination" id="extractDestination" required value="{{.CurrentPath}}"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+                <p class="text-[10px] text-slate-500 mt-1">Seluruh isi arsip akan diekstrak ke folder ini.</p>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeExtractModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Ekstrak Sekarang
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Script Logika Drag & Drop, Upload Progress, Kompres & Ekstrak -->
+<script>
+const currentDirPath = "{{.CurrentPath}}";
+
+// Helper Format Bytes
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Upload Handling dengan XMLHttpRequest & Animasi Progress Bar
+function uploadFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+
+    const modal = document.getElementById('uploadProgressModal');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const percentText = document.getElementById('uploadPercent');
+    const fileNameText = document.getElementById('uploadFileName');
+    const speedInfoText = document.getElementById('uploadSpeedInfo');
+    const statusText = document.getElementById('uploadStatusText');
+
+    let totalFiles = fileList.length;
+    let fileDesc = fileList[0].name;
+    if (totalFiles > 1) {
+        fileDesc += ' (dan ' + (totalFiles - 1) + ' berkas lainnya)';
+    }
+
+    fileNameText.textContent = fileDesc;
+    speedInfoText.textContent = 'Menyiapkan berkas...';
+    progressBar.style.width = '0%';
+    percentText.textContent = '0%';
+    statusText.textContent = 'Mengunggah ke ' + currentDirPath + '...';
+    modal.classList.remove('hidden');
+
+    const formData = new FormData();
+    formData.append('dir', currentDirPath);
+    for (let i = 0; i < fileList.length; i++) {
+        formData.append('files', fileList[i]);
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/files/upload', true);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+    xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable) {
+            const percent = Math.min(Math.round((e.loaded / e.total) * 100), 99);
+            progressBar.style.width = percent + '%';
+            percentText.textContent = percent + '%';
+            speedInfoText.textContent = formatBytes(e.loaded) + ' / ' + formatBytes(e.total);
+        }
+    });
+
+    xhr.addEventListener('load', function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            progressBar.style.width = '100%';
+            percentText.textContent = '100%';
+            statusText.textContent = '✓ Berhasil diunggah! Memuat ulang...';
+            speedInfoText.textContent = 'Selesai';
+            setTimeout(function() {
+                window.location.reload();
+            }, 600);
+        } else {
+            let errMsg = 'Gagal mengunggah berkas.';
+            try {
+                const res = JSON.parse(xhr.responseText);
+                if (res.error) errMsg = res.error;
+            } catch(e) {}
+            alert(errMsg);
+            modal.classList.add('hidden');
+        }
+    });
+
+    xhr.addEventListener('error', function() {
+        alert('Terjadi kesalahan koneksi saat mengunggah.');
+        modal.classList.add('hidden');
+    });
+
+    xhr.send(formData);
+}
+
+function handleFileSelect(files) {
+    uploadFiles(files);
+}
+
+// Drag and Drop Detection
+const overlay = document.getElementById('dragDropOverlay');
+let dragCounter = 0;
+
+window.addEventListener('dragenter', function(e) {
+    e.preventDefault();
+    dragCounter++;
+    if (overlay) overlay.classList.remove('hidden');
+});
+
+window.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter <= 0) {
+        dragCounter = 0;
+        if (overlay) overlay.classList.add('hidden');
+    }
+});
+
+window.addEventListener('dragover', function(e) {
+    e.preventDefault();
+});
+
+window.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dragCounter = 0;
+    if (overlay) overlay.classList.add('hidden');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        uploadFiles(e.dataTransfer.files);
+    }
+});
+
+// Modal Kompres
+let currentCompressBaseName = '';
+function openCompressModal(fullPath, name, isDir) {
+    currentCompressBaseName = name;
+    document.getElementById('compressSourcePath').value = fullPath;
+    document.getElementById('compressTargetName').textContent = name + (isDir ? ' (Folder)' : '');
+    updateCompressExt();
+    document.getElementById('compressModal').classList.remove('hidden');
+}
+
+function updateCompressExt() {
+    const fmt = document.getElementById('compressFormatSelect').value;
+    const ext = fmt === 'tar.gz' ? '.tar.gz' : '.zip';
+    let base = currentCompressBaseName;
+    // Hapus ekstensi lama jika ada
+    if (base.endsWith('.zip')) base = base.substring(0, base.length - 4);
+    if (base.endsWith('.tar.gz')) base = base.substring(0, base.length - 7);
+    document.getElementById('compressArchiveName').value = base + ext;
+}
+
+function closeCompressModal() {
+    document.getElementById('compressModal').classList.add('hidden');
+}
+
+// Modal Ekstrak
+function openExtractModal(fullPath, name) {
+    document.getElementById('extractSourcePath').value = fullPath;
+    document.getElementById('extractArchiveName').textContent = name;
+    document.getElementById('extractDestination').value = currentDirPath;
+    document.getElementById('extractModal').classList.remove('hidden');
+}
+
+function closeExtractModal() {
+    document.getElementById('extractModal').classList.add('hidden');
+}
+</script>
 {{end}}

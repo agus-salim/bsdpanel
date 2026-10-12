@@ -261,6 +261,9 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("POST /api/files/create", s.handleFileCreate)
 	mux.HandleFunc("POST /api/files/save", s.handleFileSave)
 	mux.HandleFunc("POST /api/files/delete", s.handleFileDelete)
+	mux.HandleFunc("POST /api/files/upload", s.handleFileUpload)
+	mux.HandleFunc("POST /api/files/compress", s.handleFileCompress)
+	mux.HandleFunc("POST /api/files/extract", s.handleFileExtract)
 
 	return s.recoveryMiddleware(s.authMiddleware(s.loggingMiddleware(mux)))
 }
