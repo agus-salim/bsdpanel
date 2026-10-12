@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -33,8 +34,21 @@ func (u *UserManager) CreateUser(username string) error {
 		"-G", "www", // User masuk ke group www agar webserver dapat mengakses socket
 	}
 
+	// Periksa apakah user sudah ada di FreeBSD
+	if idRes, err := u.runner.ExecWithTimeout(3*time.Second, "id", username); err == nil && idRes.ExitCode == 0 {
+		publicHTML := filepath.Join(homeDir, "public_html")
+		logsDir := filepath.Join(homeDir, "logs")
+		_ = os.MkdirAll(publicHTML, 0755)
+		_ = os.MkdirAll(logsDir, 0755)
+		return nil
+	}
+
 	res, err := u.runner.ExecWithTimeout(10*time.Second, "pw", args...)
 	if err != nil {
+		// Abaikan jika user sudah ada
+		if strings.Contains(res.Stderr, "already exists") {
+			return nil
+		}
 		return fmt.Errorf("gagal membuat user FreeBSD via pw: %s (%w)", res.Stderr, err)
 	}
 

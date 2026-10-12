@@ -48,6 +48,15 @@ func main() {
 		return
 	}
 
+	// Pastikan PATH FreeBSD mencakup /usr/local/sbin dan /usr/local/bin
+	curPath := os.Getenv("PATH")
+	freebsdPath := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	if curPath != "" {
+		_ = os.Setenv("PATH", freebsdPath+":"+curPath)
+	} else {
+		_ = os.Setenv("PATH", freebsdPath)
+	}
+
 	fmt.Print(banner)
 	log.Printf("[INFO] Memulai BSDPanel v%s pada %s/%s...", version, runtime.GOOS, runtime.GOARCH)
 

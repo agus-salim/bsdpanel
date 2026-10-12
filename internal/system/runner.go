@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -39,6 +41,36 @@ func NewRunner(dryRun bool) *DefaultRunner {
 	}
 }
 
+// resolveBinary mencari lokasi absolut executable di FreeBSD (/usr/local/sbin, /usr/local/bin, dll).
+func resolveBinary(name string) string {
+	if filepath.IsAbs(name) {
+		return name
+	}
+
+	// Prioritas direktori FreeBSD ports & standard binaries
+	searchDirs := []string{
+		"/usr/local/sbin",
+		"/usr/local/bin",
+		"/usr/sbin",
+		"/usr/bin",
+		"/sbin",
+		"/bin",
+	}
+
+	for _, dir := range searchDirs {
+		target := filepath.Join(dir, name)
+		if info, err := os.Stat(target); err == nil && !info.IsDir() {
+			return target
+		}
+	}
+
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
+
+	return name
+}
+
 // Exec menjalankan perintah dengan context dan memotong buffer output secara aman.
 func (r *DefaultRunner) Exec(ctx context.Context, name string, args ...string) (*CommandResult, error) {
 	start := time.Now()
@@ -50,7 +82,15 @@ func (r *DefaultRunner) Exec(ctx context.Context, name string, args ...string) (
 		return r.mockResponse(name, args, time.Since(start))
 	}
 
-	cmd := exec.CommandContext(ctx, name, args...)
+	binPath := resolveBinary(name)
+	cmd := exec.CommandContext(ctx, binPath, args...)
+
+	// Pastikan PATH mencakup /usr/local/sbin dan /usr/local/bin di FreeBSD
+	freebsdPATH := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	if cur := os.Getenv("PATH"); cur != "" {
+		freebsdPATH = freebsdPATH + ":" + cur
+	}
+	cmd.Env = append(os.Environ(), "PATH="+freebsdPATH)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
@@ -91,7 +131,6 @@ func (r *DefaultRunner) mockResponse(name string, args []string, duration time.D
 
 	switch name {
 	case "service":
-		// service <name> status/start/stop/restart/reload
 		if strings.Contains(argStr, "status") {
 			return &CommandResult{
 				Stdout:   fmt.Sprintf("%s is running as pid 1337.", args[0]),
@@ -122,7 +161,7 @@ func (r *DefaultRunner) mockResponse(name string, args []string, duration time.D
 		}
 		if strings.Contains(argStr, "vm.stats.vm.v_free_count") {
 			return &CommandResult{
-				Stdout:   "524288", // ~2GB free pages
+				Stdout:   "524288",
 				ExitCode: 0,
 				Duration: duration,
 			}, nil

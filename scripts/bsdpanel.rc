@@ -10,7 +10,7 @@
 # Variabel opsional:
 # bsdpanel_config (path):    Default "/usr/local/etc/bsdpanel/config.json"
 # bsdpanel_listen (string):  Default ":8080"
-# bsdpanel_user (user):      Default "root" (dibutuhkan untuk manajemen jail/vhost/service)
+# bsdpanel_user (user):      Default "root"
 
 . /etc/rc.subr
 
@@ -33,10 +33,13 @@ start_precmd="bsdpanel_prestart"
 
 bsdpanel_prestart()
 {
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
     if [ ! -d "/usr/local/etc/bsdpanel" ]; then
         mkdir -p /usr/local/etc/bsdpanel
         chmod 750 /usr/local/etc/bsdpanel
     fi
 }
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 run_rc_command "$1"

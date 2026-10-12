@@ -56,6 +56,19 @@ func NormalizeDocRoot(user, rawRoot string) string {
 	return rawRoot
 }
 
+// EnsureNginxInclude memastikan berkas /usr/local/etc/nginx/nginx.conf memuat direktori conf.d
+func EnsureNginxInclude() {
+	nginxConf := "/usr/local/etc/nginx/nginx.conf"
+	data, err := os.ReadFile(nginxConf)
+	if err == nil {
+		content := string(data)
+		if !strings.Contains(content, "conf.d/*.conf") && strings.Contains(content, "http {") {
+			newContent := strings.Replace(content, "http {", "http {\n    include /usr/local/etc/nginx/conf.d/*.conf;\n", 1)
+			_ = os.WriteFile(nginxConf, []byte(newContent), 0644)
+		}
+	}
+}
+
 // CreateOrUpdate membuat berkas konfigurasi Nginx di FreeBSD, membuat folder otomatis, dan reload service.
 func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 	vh.DocumentRoot = NormalizeDocRoot(vh.User, vh.DocumentRoot)
@@ -103,7 +116,10 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chown", "-R", fmt.Sprintf("%s:www", vh.User), vh.DocumentRoot)
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "-R", "755", vh.DocumentRoot)
 
-	// 2. Render Template Nginx
+	// 2. Pastikan nginx.conf memuat include conf.d/*.conf
+	EnsureNginxInclude()
+
+	// 3. Render Template Nginx
 	var buf bytes.Buffer
 	if err := m.tmpl.Execute(&buf, vh); err != nil {
 		return fmt.Errorf("eksekusi template gagal: %w", err)
