@@ -324,10 +324,12 @@ func (s *Server) handleServicesPage(w http.ResponseWriter, r *http.Request) {
 	services, _ := s.svcMgr.GetAllManagedServices()
 
 	data := PageData{
-		Title:      "FreeBSD Services",
-		ActiveMenu: "services",
-		Username:   s.getUsername(r),
-		Services:   services,
+		Title:        "FreeBSD Services",
+		ActiveMenu:   "services",
+		Username:     s.getUsername(r),
+		Services:     services,
+		FlashSuccess: r.URL.Query().Get("msg"),
+		FlashError:   r.URL.Query().Get("err"),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -524,15 +526,25 @@ func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Form invalid", http.StatusBadRequest)
+		http.Redirect(w, r, "/services?err=Form+tidak+valid", http.StatusSeeOther)
 		return
 	}
 
 	svcName := r.FormValue("service")
 	action := r.FormValue("action")
 
-	_, _ = s.svcMgr.Action(svcName, action)
-	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusSeeOther)
+	out, err := s.svcMgr.Action(svcName, action)
+	if err != nil {
+		errMsg := fmt.Sprintf("Gagal %s layanan %s: %s", action, svcName, err.Error())
+		http.Redirect(w, r, fmt.Sprintf("/services?err=%s", url.QueryEscape(errMsg)), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Layanan %s berhasil di-%s", svcName, action)
+	if out != "" && strings.Contains(out, "Autostart") {
+		msg = fmt.Sprintf("%s untuk %s", out, svcName)
+	}
+	http.Redirect(w, r, fmt.Sprintf("/services?msg=%s", url.QueryEscape(msg)), http.StatusSeeOther)
 }
 
 func (s *Server) handleAPIPHPPool(w http.ResponseWriter, r *http.Request) {

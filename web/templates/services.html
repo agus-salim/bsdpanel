@@ -1,25 +1,57 @@
 {{define "content"}}
 <div class="space-y-6">
 
-    <div>
-        <h3 class="text-base font-bold text-white">Manajemen Daemon & Layanan FreeBSD (rc.d)</h3>
-        <p class="text-xs text-slate-400 mt-1">Kelola siklus hidup daemon sistem, autostart boot (`/etc/rc.conf`), dan reload tanpa downtime.</p>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h3 class="text-base font-bold text-white">Manajemen Daemon & Layanan FreeBSD (rc.d)</h3>
+            <p class="text-xs text-slate-400 mt-1">Kelola siklus hidup daemon sistem, autostart boot (`/etc/rc.conf`), dan reload tanpa downtime.</p>
+        </div>
     </div>
+
+    {{if .FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <span>✅</span>
+            <span>{{.FlashSuccess}}</span>
+        </div>
+    </div>
+    {{end}}
+
+    {{if .FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <span>⚠️</span>
+            <span>{{.FlashError}}</span>
+        </div>
+    </div>
+    {{end}}
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         {{range .Services}}
         <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <span class="w-3 h-3 rounded-full {{if .Running}}bg-emerald-400 ring-4 ring-emerald-400/20{{else}}bg-rose-500 ring-4 ring-rose-500/20{{end}}"></span>
+                    <span class="w-3 h-3 rounded-full {{if .Running}}bg-emerald-400 ring-4 ring-emerald-400/20{{else if not .Installed}}bg-amber-400 ring-4 ring-amber-400/20{{else}}bg-rose-500 ring-4 ring-rose-500/20{{end}}"></span>
                     <div>
                         <h4 class="font-bold text-sm text-white">{{.Label}}</h4>
                         <p class="text-[11px] font-mono text-slate-400">service {{.Name}}</p>
                     </div>
                 </div>
-                <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded {{if .Running}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20{{else}}bg-rose-500/10 text-rose-400 border border-rose-500/20{{end}}">
-                    {{if .Running}}RUNNING{{else}}STOPPED{{end}}
-                </span>
+                <div class="flex items-center space-x-2">
+                    {{if not .Installed}}
+                    <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        BELUM TERPASANG
+                    </span>
+                    {{else if .Running}}
+                    <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        RUNNING
+                    </span>
+                    {{else}}
+                    <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        STOPPED
+                    </span>
+                    {{end}}
+                </div>
             </div>
 
             <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-400 truncate">
@@ -27,8 +59,26 @@
             </div>
 
             <div class="pt-2 flex items-center justify-between border-t border-slate-800">
-                <span class="text-xs text-slate-400">Autostart: <strong class="text-slate-200">{{if .Autostart}}YES{{else}}NO{{end}}</strong></span>
+                <div class="flex items-center space-x-2 text-xs text-slate-400">
+                    <span>Autostart:</span>
+                    <form method="POST" action="/api/services/action" class="inline">
+                        <input type="hidden" name="service" value="{{.Name}}">
+                        <input type="hidden" name="action" value="toggle_autostart">
+                        <button type="submit" title="Klik untuk mengubah status autostart saat boot" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded transition {{if .Autostart}}bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40{{else}}bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700{{end}}">
+                            {{if .Autostart}}YES ↻{{else}}NO ↻{{end}}
+                        </button>
+                    </form>
+                </div>
                 <div class="flex items-center space-x-2">
+                    {{if not .Installed}}
+                    <form method="POST" action="/api/services/action" class="inline">
+                        <input type="hidden" name="service" value="{{.Name}}">
+                        <input type="hidden" name="action" value="install">
+                        <button type="submit" class="px-3 py-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-medium rounded-lg border border-amber-500/30 transition flex items-center space-x-1">
+                            <span>📦 Pasang & Jalankan</span>
+                        </button>
+                    </form>
+                    {{else}}
                     <form method="POST" action="/api/services/action" class="inline">
                         <input type="hidden" name="service" value="{{.Name}}">
                         <input type="hidden" name="action" value="restart">
@@ -57,6 +107,7 @@
                         </button>
                         {{end}}
                     </form>
+                    {{end}}
                 </div>
             </div>
         </div>

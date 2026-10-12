@@ -51,7 +51,7 @@ printf "%s\n" "${GREEN}[INFO] Sistem terverifikasi: FreeBSD $VERSION ($ARCH)${NC
 
 # 3. Instalasi Dependensi Dasar via pkg
 printf "%s\n" "${YELLOW}[1/5] Memperbarui repo pkg dan memasang dependensi dasar...${NC}"
-pkg install -y ca_root_nss curl nginx mariadb1011-server \
+pkg install -y ca_root_nss curl nginx apache24 mariadb1011-server postgresql16-server \
     php83 php83-curl php83-mysqli php83-pdo_mysql php83-mbstring php83-zip php83-gd \
     security/py-certbot security/py-certbot-nginx || \
 pkg install -y py312-certbot py312-certbot-nginx || true
@@ -71,6 +71,24 @@ if [ -f "/usr/local/etc/nginx/nginx.conf" ]; then
     if ! grep -q "conf.d/\*\.conf" /usr/local/etc/nginx/nginx.conf; then
         sed -i '' 's|http {|http {\n    include /usr/local/etc/nginx/conf.d/*.conf;|' /usr/local/etc/nginx/nginx.conf
     fi
+fi
+
+# Konfigurasi Apache 2.4 mendengarkan port 8081 agar tidak bentrok dengan Nginx port 80
+if [ -f "/usr/local/etc/apache24/httpd.conf" ]; then
+    sed -i '' 's/^Listen 80$/Listen 8081/' /usr/local/etc/apache24/httpd.conf
+    if ! grep -q "ServerName" /usr/local/etc/apache24/httpd.conf; then
+        echo "ServerName localhost:8081" >> /usr/local/etc/apache24/httpd.conf
+    fi
+fi
+
+# Siapkan aturan firewall dasar /etc/pf.conf jika belum ada
+if [ ! -f "/etc/pf.conf" ]; then
+    cat << 'PFOUT' > /etc/pf.conf
+# BSDPanel Default PF Configuration
+set skip on lo0
+pass in all
+pass out all
+PFOUT
 fi
 
 # 5. Pasang Binary & Skrip rc.d
@@ -109,14 +127,23 @@ install -m 555 ./scripts/bsdpanel.rc /usr/local/etc/rc.d/bsdpanel
 printf "%s\n" "${YELLOW}[4/5] Mengonfigurasi layanan di /etc/rc.conf...${NC}"
 sysrc bsdpanel_enable="YES"
 sysrc nginx_enable="YES"
+sysrc apache24_enable="YES"
 sysrc php_fpm_enable="YES"
 sysrc mysql_enable="YES"
+sysrc postgresql_enable="YES"
+sysrc pf_enable="YES"
+
+# Inisialisasi cluster database PostgreSQL jika belum pernah dibuat
+service postgresql initdb 2>/dev/null || true
 
 # 7. Nyalakan Layanan
 printf "%s\n" "${YELLOW}[5/5] Menjalankan layanan...${NC}"
 service nginx start || service nginx restart
+service apache24 start || service apache24 restart || true
 service php_fpm start || service php_fpm restart
 service mysql-server start || true
+service postgresql start || true
+service pf start || true
 
 # Restart bsdpanel secara bersih
 service bsdpanel stop 2>/dev/null || true
