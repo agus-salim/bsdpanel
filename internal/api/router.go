@@ -149,6 +149,39 @@ func (s *Server) parseVHostFromConf(domain, content string) webserver.VHostConfi
 				vh.DocumentRoot = r
 			}
 		}
+		if strings.Contains(trimmed, "Webserver: ") {
+			parts := strings.Split(trimmed, "Webserver: ")
+			if len(parts) > 1 {
+				sub := strings.Split(parts[1], " ")[0]
+				sub = strings.TrimSpace(strings.Trim(sub, "|;"))
+				if sub != "" {
+					vh.Webserver = sub
+				}
+			}
+		}
+		if strings.Contains(trimmed, "proxy_pass http://127.0.0.1:8081") {
+			vh.Webserver = "apache24"
+		}
+		if strings.Contains(trimmed, "User: ") {
+			parts := strings.Split(trimmed, "User: ")
+			if len(parts) > 1 {
+				sub := strings.Split(parts[1], " ")[0]
+				sub = strings.TrimSpace(strings.Trim(sub, "|;"))
+				if sub != "" {
+					vh.User = sub
+				}
+			}
+		}
+		if strings.Contains(trimmed, "PHP: ") {
+			parts := strings.Split(trimmed, "PHP: ")
+			if len(parts) > 1 {
+				sub := strings.Split(parts[1], " ")[0]
+				sub = strings.TrimSpace(strings.Trim(sub, "|;"))
+				if sub != "" {
+					vh.PHPVersion = sub
+				}
+			}
+		}
 		if strings.Contains(trimmed, "fastcgi_pass unix:/var/run/") {
 			parts := strings.Split(trimmed, "/var/run/")
 			if len(parts) > 1 {

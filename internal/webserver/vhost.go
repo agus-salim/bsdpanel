@@ -32,10 +32,38 @@ type VHostConfig struct {
 	CreatedAt    string   `json:"created_at"`
 }
 
+const defaultApacheTmpl = `# Apache 2.4 Virtual Host Managed by bsdpanel
+# Domain: {{.Domain}} | User: {{.User}} | PHP: {{.PHPVersion}}
+<VirtualHost *:8081>
+    ServerName {{.Domain}}
+{{range .Aliases}}    ServerAlias {{.}}
+{{end}}
+    DocumentRoot "{{.DocumentRoot}}"
+    DirectoryIndex index.php index.html index.htm
+
+    <Directory "{{.DocumentRoot}}">
+        Options Indexes FollowSymLinks MultiViews
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+{{if .HasPHP}}
+    # PHP-FPM FastCGI Handler via unix socket
+    <FilesMatch "\.php$">
+        SetHandler "proxy:unix:{{.PHPSocket}}|fcgi://localhost/"
+    </FilesMatch>
+{{end}}
+
+    ErrorLog "/var/log/httpd-{{.Domain}}-error.log"
+    CustomLog "/var/log/httpd-{{.Domain}}-access.log" combined
+</VirtualHost>
+`
+
 type Manager struct {
-	vhostDir string
-	runner   system.Runner
-	tmpl     *template.Template
+	vhostDir   string
+	runner     system.Runner
+	tmpl       *template.Template
+	apacheTmpl *template.Template
 }
 
 func NewManager(vhostDir string, runner system.Runner, tmplContent string) (*Manager, error) {
@@ -43,10 +71,12 @@ func NewManager(vhostDir string, runner system.Runner, tmplContent string) (*Man
 	if err != nil {
 		return nil, fmt.Errorf("gagal parse template vhost: %w", err)
 	}
+	at, _ := template.New("apacheVHost").Parse(defaultApacheTmpl)
 	return &Manager{
-		vhostDir: vhostDir,
-		runner:   runner,
-		tmpl:     t,
+		vhostDir:   vhostDir,
+		runner:     runner,
+		tmpl:       t,
+		apacheTmpl: at,
 	}, nil
 }
 
@@ -72,6 +102,64 @@ func EnsureNginxInclude() {
 			newContent := strings.Replace(content, "http {", "http {\n    include /usr/local/etc/nginx/conf.d/*.conf;\n", 1)
 			_ = os.WriteFile(nginxConf, []byte(newContent), 0644)
 		}
+	}
+}
+
+// EnsureApacheConfig memastikan Apache 2.4 dikonfigurasi untuk port 8081, module proxy & rewrite aktif
+func EnsureApacheConfig(runner system.Runner) {
+	httpdConf := "/usr/local/etc/apache24/httpd.conf"
+	data, err := os.ReadFile(httpdConf)
+	if err != nil {
+		return
+	}
+	content := string(data)
+	changed := false
+
+	// 1. Pastikan Listen 8081 agar tidak bentrok dengan Nginx port 80
+	if strings.Contains(content, "Listen 80\n") || strings.Contains(content, "Listen 80\r\n") {
+		content = strings.Replace(content, "Listen 80", "Listen 8081", 1)
+		changed = true
+	}
+
+	// 2. ServerName
+	if !strings.Contains(content, "ServerName localhost:8081") {
+		if !strings.Contains(content, "ServerName") {
+			content += "\nServerName localhost:8081\n"
+			changed = true
+		}
+	}
+
+	// 3. Modul proxy, proxy_fcgi, dan rewrite untuk PHP-FPM dan .htaccess
+	modules := []struct {
+		commented   string
+		uncommented string
+	}{
+		{"#LoadModule proxy_module libexec/apache24/mod_proxy.so", "LoadModule proxy_module libexec/apache24/mod_proxy.so"},
+		{"#LoadModule proxy_fcgi_module libexec/apache24/mod_proxy_fcgi.so", "LoadModule proxy_fcgi_module libexec/apache24/mod_proxy_fcgi.so"},
+		{"#LoadModule rewrite_module libexec/apache24/mod_rewrite.so", "LoadModule rewrite_module libexec/apache24/mod_rewrite.so"},
+	}
+	for _, m := range modules {
+		if strings.Contains(content, m.commented) {
+			content = strings.Replace(content, m.commented, m.uncommented, 1)
+			changed = true
+		}
+	}
+
+	// 4. Pastikan Include Includes/*.conf
+	if !strings.Contains(content, "Include etc/apache24/Includes/*.conf") && !strings.Contains(content, "IncludeOptional etc/apache24/Includes/*.conf") {
+		content += "\nInclude etc/apache24/Includes/*.conf\n"
+		changed = true
+	}
+
+	if changed {
+		_ = os.WriteFile(httpdConf, []byte(content), 0644)
+	}
+
+	_ = os.MkdirAll("/usr/local/etc/apache24/Includes", 0755)
+
+	if runner != nil {
+		_, _ = runner.ExecWithTimeout(5*time.Second, "sysrc", "apache24_enable=YES")
+		_, _ = runner.ExecWithTimeout(5*time.Second, "service", "apache24", "start")
 	}
 }
 
@@ -184,6 +272,26 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 
 	// 5. Reload Nginx tanpa downtime: `service nginx reload`
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "nginx", "reload")
+
+	// 6. Penanganan Apache 2.4 Virtual Host jika dipilih
+	apacheConfPath := filepath.Join("/usr/local/etc/apache24/Includes", fmt.Sprintf("%s.conf", vh.Domain))
+	if vh.Webserver == "apache24" {
+		EnsureApacheConfig(m.runner)
+		if m.apacheTmpl != nil {
+			var aBuf bytes.Buffer
+			if err := m.apacheTmpl.Execute(&aBuf, vh); err == nil {
+				_ = os.WriteFile(apacheConfPath, aBuf.Bytes(), 0644)
+				_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "apache24", "reload")
+			}
+		}
+	} else {
+		// Bersihkan konfigurasi Apache jika beralih ke Nginx murni
+		if fileExists(apacheConfPath) {
+			_ = os.Remove(apacheConfPath)
+			_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "apache24", "reload")
+		}
+	}
+
 	return nil
 }
 
@@ -317,11 +425,17 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// Delete menghapus berkas konfigurasi VHost dan reload Nginx.
+// Delete menghapus berkas konfigurasi VHost dan reload Nginx & Apache.
 func (m *Manager) Delete(domain string) error {
 	confPath := filepath.Join(m.vhostDir, fmt.Sprintf("%s.conf", domain))
 	if err := os.Remove(confPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("gagal menghapus config %s: %w", confPath, err)
+	}
+
+	apacheConfPath := filepath.Join("/usr/local/etc/apache24/Includes", fmt.Sprintf("%s.conf", domain))
+	if fileExists(apacheConfPath) {
+		_ = os.Remove(apacheConfPath)
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "apache24", "reload")
 	}
 
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "nginx", "reload")

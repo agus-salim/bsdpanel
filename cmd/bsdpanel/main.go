@@ -78,6 +78,7 @@ func main() {
 
 	// Template bawaan untuk Nginx VHost & PHP Pool
 	nginxTmpl := `# Nginx VHost Managed by bsdpanel
+# Webserver: {{.Webserver}} | User: {{.User}} | PHP: {{.PHPVersion}}
 server {
     listen 80;
     listen [::]:80;
@@ -91,6 +92,17 @@ server {
         try_files $uri =404;
     }
 
+    {{if eq .Webserver "apache24"}}
+    # Reverse Proxy ke Apache 2.4 (Backend Port 8081)
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass_header Server;
+    }
+    {{else}}
     {{if .SSLEnabled}}
     location / {
         return 301 https://$host$request_uri;
@@ -113,6 +125,7 @@ server {
     }
     {{end}}
     {{end}}
+    {{end}}
 }
 
 {{if .SSLEnabled}}
@@ -126,10 +139,22 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
-    root {{.DocumentRoot}};
-    index index.php index.html;
     access_log /var/log/nginx/{{.Domain}}_ssl_access.log;
     error_log /var/log/nginx/{{.Domain}}_ssl_error.log;
+
+    {{if eq .Webserver "apache24"}}
+    # Reverse Proxy ke Apache 2.4 (Backend Port 8081)
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass_header Server;
+    }
+    {{else}}
+    root {{.DocumentRoot}};
+    index index.php index.html;
     location / {
         try_files $uri $uri/ /index.php?$args;
     }
@@ -141,6 +166,7 @@ server {
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
+    {{end}}
     {{end}}
 }
 {{end}}`
