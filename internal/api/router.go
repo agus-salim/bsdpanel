@@ -93,11 +93,11 @@ func (s *Server) SetupRouter() http.Handler {
 	// Static Assets dari embed.FS
 	staticFS, err := fs.Sub(web.Content, "static")
 	if err == nil {
-		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+		mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	}
 
 	// Web UI Pages
-	mux.HandleFunc("GET /", s.handleDashboard)
+	mux.HandleFunc("GET /{$}", s.handleDashboard)
 	mux.HandleFunc("GET /vhosts", s.handleVHostsPage)
 	mux.HandleFunc("GET /services", s.handleServicesPage)
 	mux.HandleFunc("GET /php", s.handlePHPPage)
