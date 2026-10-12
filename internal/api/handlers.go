@@ -315,10 +315,38 @@ func (s *Server) handleFileSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Clean(r.FormValue("path"))
-	parent := filepath.Dir(path)
-	_ = os.RemoveAll(path)
-	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=Dihapus+berhasil", parent), http.StatusSeeOther)
+	_ = r.ParseForm()
+	paths := r.Form["paths"]
+	if len(paths) == 0 {
+		single := strings.TrimSpace(r.FormValue("path"))
+		if single != "" {
+			paths = []string{single}
+		}
+	}
+
+	var parent string
+	count := 0
+	for _, p := range paths {
+		cleaned := filepath.Clean(strings.TrimSpace(p))
+		if cleaned != "" && cleaned != "/" && cleaned != "." {
+			if parent == "" {
+				parent = filepath.Dir(cleaned)
+			}
+			if err := os.RemoveAll(cleaned); err == nil {
+				count++
+			}
+		}
+	}
+
+	if parent == "" {
+		parent = "/home"
+	}
+
+	msg := fmt.Sprintf("%d berkas/folder berhasil dihapus", count)
+	if count <= 1 {
+		msg = "Berkas berhasil dihapus"
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=%s", url.QueryEscape(parent), url.QueryEscape(msg)), http.StatusSeeOther)
 }
 
 func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
@@ -418,15 +446,41 @@ func (s *Server) handleFileCompress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sourcePath := filepath.Clean(r.FormValue("path"))
+	paths := r.Form["paths"]
+	if len(paths) == 0 {
+		single := strings.TrimSpace(r.FormValue("path"))
+		if single != "" {
+			paths = []string{single}
+		}
+	}
+
+	var sourcePaths []string
+	for _, p := range paths {
+		cleaned := filepath.Clean(strings.TrimSpace(p))
+		if cleaned != "" && cleaned != "/" && cleaned != "." {
+			sourcePaths = append(sourcePaths, cleaned)
+		}
+	}
+
+	if len(sourcePaths) == 0 {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Tidak ada berkas yang dipilih"})
+			return
+		}
+		http.Redirect(w, r, "/files?err=Tidak+ada+berkas+yang+dipilih+untuk+dikompres", http.StatusSeeOther)
+		return
+	}
+
 	format := strings.ToLower(strings.TrimSpace(r.FormValue("format")))
 	if format == "" {
 		format = "zip"
 	}
 
+	dir := filepath.Dir(sourcePaths[0])
 	customName := strings.TrimSpace(r.FormValue("archive_name"))
-	dir := filepath.Dir(sourcePath)
-	base := filepath.Base(sourcePath)
+	base := filepath.Base(sourcePaths[0])
 
 	var archiveName string
 	if customName != "" {
@@ -437,15 +491,21 @@ func (s *Server) handleFileCompress(w http.ResponseWriter, r *http.Request) {
 			archiveName += ".tar.gz"
 		}
 	} else {
-		if format == "zip" {
+		if len(sourcePaths) == 1 {
 			archiveName = base + ".zip"
+			if format == "tar.gz" || format == "tgz" {
+				archiveName = base + ".tar.gz"
+			}
 		} else {
-			archiveName = base + ".tar.gz"
+			archiveName = "archive.zip"
+			if format == "tar.gz" || format == "tgz" {
+				archiveName = "archive.tar.gz"
+			}
 		}
 	}
 
 	destPath := filepath.Join(dir, archiveName)
-	if err := archiver.Compress(sourcePath, destPath, format); err != nil {
+	if err := archiver.CompressMultiple(sourcePaths, destPath, format); err != nil {
 		if isJSON {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)

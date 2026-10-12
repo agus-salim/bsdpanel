@@ -52,12 +52,41 @@
         <span>Tarik dan lepaskan berkas di sini untuk mengunggah secara otomatis, atau klik untuk memilih berkas.</span>
     </div>
 
+    <!-- Bar Aksi Batch (Muncul otomatis saat berkas/folder dicentang) -->
+    <div id="batchActionBar" class="hidden bg-slate-900 border border-emerald-500/40 rounded-xl p-3 shadow-lg shadow-emerald-950/40 flex flex-wrap items-center justify-between gap-3 transition-all duration-200">
+        <div class="flex items-center space-x-2.5">
+            <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs font-bold font-mono" id="selectedCountBadge">0</span>
+            <span class="text-xs text-white font-semibold">item terpilih</span>
+            <span class="text-slate-600">|</span>
+            <button type="button" onclick="clearAllSelections()" class="text-xs text-slate-400 hover:text-slate-200 hover:underline">
+                Batal Pilih Semua
+            </button>
+        </div>
+        <div class="flex items-center space-x-2">
+            <!-- Tombol Kompres Terpilih -->
+            <button type="button" onclick="openBatchCompressModal()" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition text-xs font-semibold shadow-sm flex items-center space-x-1.5 cursor-pointer">
+                <span>📦</span>
+                <span>Kompres</span>
+            </button>
+
+            <!-- Tombol Hapus Terpilih -->
+            <button type="button" onclick="openBatchDeleteConfirm()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition text-xs font-semibold shadow-sm flex items-center space-x-1.5 cursor-pointer">
+                <span>🗑️</span>
+                <span>Hapus</span>
+            </button>
+        </div>
+    </div>
+
     <!-- Tabel Berkas -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-300">
                 <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
                     <tr>
+                        <th class="p-3.5 w-10 text-center">
+                            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua Berkas/Folder"
+                                class="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer">
+                        </th>
                         <th class="p-3.5">Nama</th>
                         <th class="p-3.5">Ukuran</th>
                         <th class="p-3.5">Hak Akses</th>
@@ -67,7 +96,12 @@
                 </thead>
                 <tbody class="divide-y divide-slate-800 font-mono text-[11px]">
                     {{range .Files}}
-                    <tr class="hover:bg-slate-800/40 transition">
+                    <tr class="hover:bg-slate-800/40 transition file-row" id="row-{{.Name}}">
+                        <td class="p-3.5 w-10 text-center">
+                            <input type="checkbox" class="file-checkbox w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                                data-path="{{$.CurrentPath}}/{{.Name}}" data-name="{{.Name}}" data-isdir="{{.IsDir}}"
+                                onchange="onCheckboxChange()">
+                        </td>
                         <td class="p-3.5 flex items-center space-x-2">
                             {{if .IsDir}}
                             <span class="text-amber-400 text-sm">📁</span>
@@ -120,7 +154,7 @@
                     </tr>
                     {{else}}
                     <tr>
-                        <td colspan="5" class="p-8 text-center text-slate-500">
+                        <td colspan="6" class="p-8 text-center text-slate-500">
                             Direktori ini kosong. Tarik berkas ke area ini untuk mengunggah.
                         </td>
                     </tr>
@@ -223,11 +257,11 @@
             <button type="button" onclick="closeCompressModal()" class="text-slate-400 hover:text-white">✕</button>
         </div>
         <form method="POST" action="/api/files/compress" class="space-y-4 text-xs">
-            <input type="hidden" name="path" id="compressSourcePath">
+            <div id="compressHiddenInputs"></div>
 
             <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
                 <p class="text-[11px] text-slate-400">Target yang akan dikompres:</p>
-                <p class="font-mono font-bold text-emerald-400 text-sm mt-0.5 truncate" id="compressTargetName">-</p>
+                <p class="font-mono font-bold text-emerald-400 text-sm mt-0.5 break-all" id="compressTargetName">-</p>
             </div>
 
             <div>
@@ -249,6 +283,42 @@
                 <button type="button" onclick="closeCompressModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
                 <button type="submit" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg transition shadow-sm">
                     Mulai Kompres
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Konfirmasi Hapus Terpilih (Batch Delete) -->
+<div id="batchDeleteModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-rose-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center space-x-3 text-rose-400 border-b border-slate-800 pb-3">
+            <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-xl shrink-0">
+                ⚠️
+            </div>
+            <div>
+                <h3 class="text-sm font-bold text-white">Hapus Berkas / Folder Terpilih</h3>
+                <p class="text-[11px] text-slate-400">Tindakan ini akan menghapus data secara permanen</p>
+            </div>
+        </div>
+
+        <form method="POST" action="/api/files/delete" class="space-y-4 text-xs">
+            <div id="batchDeleteHiddenInputs"></div>
+
+            <div class="bg-rose-950/20 border border-rose-500/20 rounded-xl p-3.5 space-y-2">
+                <p class="text-slate-300">
+                    Anda akan menghapus <span class="font-bold text-rose-400 font-mono" id="batchDeleteCountText">0 item</span> berikut:
+                </p>
+                <div id="batchDeleteList" class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-32 overflow-y-auto space-y-1 font-mono text-[11px] text-slate-300">
+                </div>
+            </div>
+
+            <p class="text-[11px] text-slate-400">Apakah Anda yakin ingin menghapus seluruh berkas/folder terpilih?</p>
+
+            <div class="pt-2 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeBatchDeleteModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg transition shadow-md shadow-rose-950/50 cursor-pointer">
+                    Hapus Sekarang
                 </button>
             </div>
         </form>
@@ -410,12 +480,107 @@ window.addEventListener('drop', function(e) {
     }
 });
 
-// Modal Kompres
+// Logika Seleksi Checkbox & Batch Actions
+function toggleSelectAll(checked) {
+    const checkboxes = document.querySelectorAll('.file-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checked;
+        highlightRow(cb);
+    });
+    updateBatchBar();
+}
+
+function onCheckboxChange() {
+    updateBatchBar();
+}
+
+function highlightRow(cb) {
+    const tr = cb.closest('tr');
+    if (tr) {
+        if (cb.checked) {
+            tr.classList.add('bg-slate-800/60');
+        } else {
+            tr.classList.remove('bg-slate-800/60');
+        }
+    }
+}
+
+function updateBatchBar() {
+    const checkboxes = Array.from(document.querySelectorAll('.file-checkbox'));
+    const checkedBoxes = checkboxes.filter(cb => cb.checked);
+    checkboxes.forEach(cb => highlightRow(cb));
+
+    const bar = document.getElementById('batchActionBar');
+    const badge = document.getElementById('selectedCountBadge');
+    const selectAllCb = document.getElementById('selectAllCheckbox');
+
+    if (badge) badge.textContent = checkedBoxes.length;
+
+    if (checkedBoxes.length > 0) {
+        if (bar) bar.classList.remove('hidden');
+    } else {
+        if (bar) bar.classList.add('hidden');
+    }
+
+    if (selectAllCb) {
+        if (checkedBoxes.length === 0) {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = false;
+        } else if (checkedBoxes.length === checkboxes.length) {
+            selectAllCb.checked = true;
+            selectAllCb.indeterminate = false;
+        } else {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = true;
+        }
+    }
+}
+
+function clearAllSelections() {
+    toggleSelectAll(false);
+    const selectAllCb = document.getElementById('selectAllCheckbox');
+    if (selectAllCb) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+    }
+}
+
+// Modal Kompres (Single & Batch)
 let currentCompressBaseName = '';
+
 function openCompressModal(fullPath, name, isDir) {
+    const container = document.getElementById('compressHiddenInputs');
+    container.innerHTML = '<input type="hidden" name="paths" value="' + escapeHtml(fullPath) + '">';
     currentCompressBaseName = name;
-    document.getElementById('compressSourcePath').value = fullPath;
     document.getElementById('compressTargetName').textContent = name + (isDir ? ' (Folder)' : '');
+    updateCompressExt();
+    document.getElementById('compressModal').classList.remove('hidden');
+}
+
+function openBatchCompressModal() {
+    const checkedBoxes = Array.from(document.querySelectorAll('.file-checkbox:checked'));
+    if (checkedBoxes.length === 0) return;
+
+    const container = document.getElementById('compressHiddenInputs');
+    container.innerHTML = '';
+
+    checkedBoxes.forEach(cb => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'paths';
+        input.value = cb.getAttribute('data-path');
+        container.appendChild(input);
+    });
+
+    const names = checkedBoxes.map(cb => cb.getAttribute('data-name'));
+    if (checkedBoxes.length === 1) {
+        currentCompressBaseName = names[0];
+        document.getElementById('compressTargetName').textContent = names[0];
+    } else {
+        currentCompressBaseName = 'archive';
+        document.getElementById('compressTargetName').textContent = checkedBoxes.length + ' item terpilih (' + names.slice(0, 3).join(', ') + (names.length > 3 ? '...' : '') + ')';
+    }
+
     updateCompressExt();
     document.getElementById('compressModal').classList.remove('hidden');
 }
@@ -424,7 +589,6 @@ function updateCompressExt() {
     const fmt = document.getElementById('compressFormatSelect').value;
     const ext = fmt === 'tar.gz' ? '.tar.gz' : '.zip';
     let base = currentCompressBaseName;
-    // Hapus ekstensi lama jika ada
     if (base.endsWith('.zip')) base = base.substring(0, base.length - 4);
     if (base.endsWith('.tar.gz')) base = base.substring(0, base.length - 7);
     document.getElementById('compressArchiveName').value = base + ext;
@@ -432,6 +596,47 @@ function updateCompressExt() {
 
 function closeCompressModal() {
     document.getElementById('compressModal').classList.add('hidden');
+}
+
+// Modal Batch Delete
+function openBatchDeleteConfirm() {
+    const checkedBoxes = Array.from(document.querySelectorAll('.file-checkbox:checked'));
+    if (checkedBoxes.length === 0) return;
+
+    const listContainer = document.getElementById('batchDeleteList');
+    const formContainer = document.getElementById('batchDeleteHiddenInputs');
+    listContainer.innerHTML = '';
+    formContainer.innerHTML = '';
+
+    checkedBoxes.forEach(cb => {
+        const p = cb.getAttribute('data-path');
+        const name = cb.getAttribute('data-name');
+        const isDir = cb.getAttribute('data-isdir') === 'true';
+
+        const div = document.createElement('div');
+        div.className = 'flex items-center space-x-1.5 truncate py-0.5';
+        div.innerHTML = '<span class="text-rose-400 font-bold">✕</span><span class="text-slate-400">' + (isDir ? '📁' : '📄') + '</span><span class="truncate font-semibold text-rose-300">' + escapeHtml(name) + '</span>';
+        listContainer.appendChild(div);
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'paths';
+        input.value = p;
+        formContainer.appendChild(input);
+    });
+
+    document.getElementById('batchDeleteCountText').textContent = checkedBoxes.length + ' item';
+    document.getElementById('batchDeleteModal').classList.remove('hidden');
+}
+
+function closeBatchDeleteModal() {
+    document.getElementById('batchDeleteModal').classList.add('hidden');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Modal Ekstrak

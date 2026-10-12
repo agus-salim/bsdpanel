@@ -13,11 +13,19 @@ import (
 
 // Compress compresses sourcePath (file or directory) into destPath based on format ("zip" or "tar.gz").
 func Compress(sourcePath, destPath, format string) error {
+	return CompressMultiple([]string{sourcePath}, destPath, format)
+}
+
+// CompressMultiple compresses multiple files or directories into destPath based on format ("zip" or "tar.gz").
+func CompressMultiple(sourcePaths []string, destPath, format string) error {
+	if len(sourcePaths) == 0 {
+		return fmt.Errorf("tidak ada berkas untuk dikompres")
+	}
 	switch strings.ToLower(format) {
 	case "zip":
-		return CompressZip(sourcePath, destPath)
+		return CompressMultipleZip(sourcePaths, destPath)
 	case "tar.gz", "tgz":
-		return CompressTarGz(sourcePath, destPath)
+		return CompressMultipleTarGz(sourcePaths, destPath)
 	default:
 		return fmt.Errorf("format kompresi tidak didukung: %s", format)
 	}
@@ -25,6 +33,11 @@ func Compress(sourcePath, destPath, format string) error {
 
 // CompressZip creates a zip archive of sourcePath at destZipPath.
 func CompressZip(sourcePath, destZipPath string) error {
+	return CompressMultipleZip([]string{sourcePath}, destZipPath)
+}
+
+// CompressMultipleZip creates a zip archive containing multiple source files or directories at destZipPath.
+func CompressMultipleZip(sourcePaths []string, destZipPath string) error {
 	outFile, err := os.Create(destZipPath)
 	if err != nil {
 		return fmt.Errorf("gagal membuat berkas arsip zip: %w", err)
@@ -34,71 +47,94 @@ func CompressZip(sourcePath, destZipPath string) error {
 	w := zip.NewWriter(outFile)
 	defer w.Close()
 
-	fi, err := os.Stat(sourcePath)
-	if err != nil {
-		return fmt.Errorf("sumber tidak ditemukan: %w", err)
+	for _, sourcePath := range sourcePaths {
+		sourcePath = filepath.Clean(sourcePath)
+		fi, err := os.Stat(sourcePath)
+		if err != nil {
+			continue
+		}
+
+		if !fi.IsDir() {
+			f, err := os.Open(sourcePath)
+			if err != nil {
+				return err
+			}
+
+			header, err := zip.FileInfoHeader(fi)
+			if err != nil {
+				f.Close()
+				return err
+			}
+			header.Name = filepath.Base(sourcePath)
+			header.Method = zip.Deflate
+
+			zf, err := w.CreateHeader(header)
+			if err != nil {
+				f.Close()
+				return err
+			}
+			_, err = io.Copy(zf, f)
+			f.Close()
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Directory
+		baseDir := filepath.Dir(sourcePath)
+		err = filepath.Walk(sourcePath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			relPath, err := filepath.Rel(baseDir, path)
+			if err != nil {
+				return err
+			}
+			relPath = filepath.ToSlash(relPath)
+
+			header, err := zip.FileInfoHeader(info)
+			if err != nil {
+				return err
+			}
+			header.Name = relPath
+
+			if info.IsDir() {
+				header.Name += "/"
+				_, err = w.CreateHeader(header)
+				return err
+			}
+
+			header.Method = zip.Deflate
+			writer, err := w.CreateHeader(header)
+			if err != nil {
+				return err
+			}
+
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(writer, file)
+			return err
+		})
+		if err != nil {
+			return err
+		}
 	}
-
-	if !fi.IsDir() {
-		// Single file
-		f, err := os.Open(sourcePath)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		zf, err := w.Create(filepath.Base(sourcePath))
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(zf, f)
-		return err
-	}
-
-	// Directory
-	baseDir := filepath.Dir(sourcePath)
-	return filepath.Walk(sourcePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(baseDir, path)
-		if err != nil {
-			return err
-		}
-		relPath = filepath.ToSlash(relPath)
-
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		header.Name = relPath
-
-		if info.IsDir() {
-			header.Name += "/"
-			_, err = w.CreateHeader(header)
-			return err
-		}
-
-		header.Method = zip.Deflate
-		writer, err := w.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(writer, file)
-		return err
-	})
+	return nil
 }
 
 // CompressTarGz creates a .tar.gz archive of sourcePath at destTarGzPath.
 func CompressTarGz(sourcePath, destTarGzPath string) error {
+	return CompressMultipleTarGz([]string{sourcePath}, destTarGzPath)
+}
+
+// CompressMultipleTarGz creates a .tar.gz archive of multiple source files or directories at destTarGzPath.
+func CompressMultipleTarGz(sourcePaths []string, destTarGzPath string) error {
 	outFile, err := os.Create(destTarGzPath)
 	if err != nil {
 		return fmt.Errorf("gagal membuat berkas tar.gz: %w", err)
@@ -111,66 +147,79 @@ func CompressTarGz(sourcePath, destTarGzPath string) error {
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
 
-	fi, err := os.Stat(sourcePath)
-	if err != nil {
-		return fmt.Errorf("sumber tidak ditemukan: %w", err)
+	for _, sourcePath := range sourcePaths {
+		sourcePath = filepath.Clean(sourcePath)
+		fi, err := os.Stat(sourcePath)
+		if err != nil {
+			continue
+		}
+
+		if !fi.IsDir() {
+			f, err := os.Open(sourcePath)
+			if err != nil {
+				return err
+			}
+
+			hdr, err := tar.FileInfoHeader(fi, "")
+			if err != nil {
+				f.Close()
+				return err
+			}
+			hdr.Name = filepath.Base(sourcePath)
+
+			if err := tw.WriteHeader(hdr); err != nil {
+				f.Close()
+				return err
+			}
+			_, err = io.Copy(tw, f)
+			f.Close()
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Directory
+		baseDir := filepath.Dir(sourcePath)
+		err = filepath.Walk(sourcePath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			relPath, err := filepath.Rel(baseDir, path)
+			if err != nil {
+				return err
+			}
+			relPath = filepath.ToSlash(relPath)
+
+			hdr, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+			hdr.Name = relPath
+
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(tw, file)
+			return err
+		})
+		if err != nil {
+			return err
+		}
 	}
-
-	if !fi.IsDir() {
-		f, err := os.Open(sourcePath)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		hdr, err := tar.FileInfoHeader(fi, "")
-		if err != nil {
-			return err
-		}
-		hdr.Name = filepath.Base(sourcePath)
-
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-		_, err = io.Copy(tw, f)
-		return err
-	}
-
-	baseDir := filepath.Dir(sourcePath)
-	return filepath.Walk(sourcePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(baseDir, path)
-		if err != nil {
-			return err
-		}
-		relPath = filepath.ToSlash(relPath)
-
-		hdr, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		hdr.Name = relPath
-
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(tw, file)
-		return err
-	})
+	return nil
 }
 
 // Extract extracts an archive (zip, tar.gz, tgz, tar) into destDir.
