@@ -3,10 +3,10 @@ package webserver
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/agus-salim/bsdpanel/internal/system"
