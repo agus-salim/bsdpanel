@@ -1,0 +1,330 @@
+{{define "content"}}
+<div class="space-y-6">
+
+    <!-- Header & Action Button -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h3 class="text-base font-bold text-white tracking-tight">Manajemen Database (MariaDB & PostgreSQL)</h3>
+            <p class="text-xs text-slate-400 mt-1">Kelola database yang terhubung ke virtual host, kredensial akses, serta import & export dump SQL.</p>
+        </div>
+        <button type="button" onclick="openAddDBModal()"
+            class="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-950/40 transition">
+            <span>+</span>
+            <span>Tambah / Tautkan Database</span>
+        </button>
+    </div>
+
+    {{if .FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <span>✅</span>
+            <span>{{.FlashSuccess}}</span>
+        </div>
+    </div>
+    {{end}}
+
+    {{if .FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <span>⚠️</span>
+            <span>{{.FlashError}}</span>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Stat Badges Overview -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-[11px] font-medium text-slate-400">Total Database</p>
+                <p class="text-xl font-bold text-white mt-1">{{len .Databases}}</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 text-lg">
+                🗄️
+            </div>
+        </div>
+
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-[11px] font-medium text-slate-400">MariaDB / MySQL</p>
+                <p class="text-xs font-mono text-cyan-400 mt-1">Port 3306 (Active)</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-lg">
+                🐬
+            </div>
+        </div>
+
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-[11px] font-medium text-slate-400">PostgreSQL Server</p>
+                <p class="text-xs font-mono text-indigo-400 mt-1">Port 5432 (Active)</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-lg">
+                🐘
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Table -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+            <h4 class="font-bold text-sm text-white">Daftar Database & Situs Terkait</h4>
+            <span class="text-xs text-slate-400">{{len .Databases}} database terdaftar</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="border-b border-slate-800 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th class="p-3.5">Situs / Domain</th>
+                        <th class="p-3.5">Tipe Engine</th>
+                        <th class="p-3.5">Nama Database</th>
+                        <th class="p-3.5">User Database</th>
+                        <th class="p-3.5">Host & Port</th>
+                        <th class="p-3.5">Tanggal</th>
+                        <th class="p-3.5 text-right">Aksi (Import/Export/Kelola)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60">
+                    {{if .Databases}}
+                    {{range .Databases}}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-3.5">
+                            {{if .Domain}}
+                            <div class="flex items-center space-x-2">
+                                <span class="text-slate-400">🌐</span>
+                                <span class="font-semibold text-slate-200">{{.Domain}}</span>
+                            </div>
+                            {{else}}
+                            <span class="text-slate-500 italic">Standalone (Tanpa VHost)</span>
+                            {{end}}
+                        </td>
+                        <td class="p-3.5">
+                            {{if eq .Engine "postgresql"}}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                🐘 PostgreSQL
+                            </span>
+                            {{else}}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                🐬 MariaDB
+                            </span>
+                            {{end}}
+                        </td>
+                        <td class="p-3.5 font-mono font-bold text-white">{{.DBName}}</td>
+                        <td class="p-3.5 font-mono text-slate-300">{{.DBUser}}</td>
+                        <td class="p-3.5 font-mono text-slate-400 text-[11px]">{{.Host}}:{{.Port}}</td>
+                        <td class="p-3.5 text-slate-500 text-[11px]">{{.CreatedAt}}</td>
+                        <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                            <!-- Import SQL -->
+                            <button type="button" onclick="openImportModal('{{.ID}}', '{{.DBName}}', '{{.Engine}}')" title="Import File SQL ke Database ini"
+                                class="inline-flex items-center space-x-1 px-2.5 py-1 text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/20 transition shadow-sm">
+                                <span>📥</span>
+                                <span>Import SQL</span>
+                            </button>
+
+                            <!-- Export SQL -->
+                            <a href="/api/databases/export?id={{.ID}}" title="Export / Download Dump SQL Database"
+                                class="inline-flex items-center space-x-1 px-2.5 py-1 text-[11px] font-medium bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/20 transition shadow-sm">
+                                <span>📤</span>
+                                <span>Export SQL</span>
+                            </a>
+
+                            <!-- Edit Kredensial -->
+                            <button type="button" onclick="openEditDBModal('{{.ID}}', '{{.Domain}}', '{{.Engine}}', '{{.DBName}}', '{{.DBUser}}', '{{.DBPass}}')" title="Edit Kredensial Database"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded border border-slate-700 transition">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+
+                            <!-- Hapus Database -->
+                            <form method="POST" action="/api/databases/delete" onsubmit="return confirm('Hapus database {{.DBName}}? Centang drop DBMS jika ingin menghapus permanen.')" class="inline">
+                                <input type="hidden" name="id" value="{{.ID}}">
+                                <input type="hidden" name="drop_dbms" value="1">
+                                <button type="submit" title="Hapus Database"
+                                    class="inline-flex items-center justify-center px-2 py-1 text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
+                                    Hapus
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {{end}}
+                    {{else}}
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-500">
+                            Belum ada database yang terdaftar. Klik tombol <strong>+ Tambah / Tautkan Database</strong> di atas atau tautkan melalui menu Virtual Hosts.
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{{end}}
+
+{{define "modals"}}
+<!-- Modal Tambah / Edit Database -->
+<div id="dbModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 id="dbModalTitle" class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>🗄️</span>
+                <span>Tambah / Tautkan Database</span>
+            </h3>
+            <button type="button" onclick="closeDBModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <form method="POST" action="/api/databases/save" class="space-y-4 text-xs">
+            <input type="hidden" name="id" id="modalDBId">
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Situs / Virtual Host Terkait</label>
+                <select name="domain" id="modalDBDomain" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                    <option value="">-- Standalone (Tanpa VHost) --</option>
+                    {{range .VHosts}}
+                    <option value="{{.Domain}}">{{.Domain}}</option>
+                    {{end}}
+                </select>
+                <p class="text-[10px] text-slate-500 mt-1">Database akan ditautkan ke situs yang dipilih.</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Tipe Database Engine</label>
+                <select name="engine" id="modalDBEngine" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                    <option value="mariadb">MariaDB / MySQL Server (Default - Port 3306)</option>
+                    <option value="postgresql">PostgreSQL Database (Port 5432)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Nama Database</label>
+                <input type="text" name="db_name" id="modalDBName" required placeholder="contoh: blog_db"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">User Database</label>
+                <input type="text" name="db_user" id="modalDBUser" required placeholder="contoh: blog_user"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-slate-300 font-semibold">Password Database</label>
+                    <button type="button" onclick="generateRandomPass('modalDBPass')" class="text-[11px] text-emerald-400 hover:text-emerald-300">
+                        ⚡ Generate Password
+                    </button>
+                </div>
+                <input type="text" name="db_pass" id="modalDBPass" required placeholder="Password kuat..."
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" name="create_dbms" value="1" checked class="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500">
+                    <span class="text-[11px] text-slate-300 font-medium">Buat otomatis di database server jika belum ada</span>
+                </label>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeDBModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Simpan Database
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Import SQL -->
+<div id="importModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>📥</span>
+                <span>Import File SQL</span>
+            </h3>
+            <button type="button" onclick="closeImportModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <form method="POST" action="/api/databases/import" enctype="multipart/form-data" class="space-y-4 text-xs">
+            <input type="hidden" name="id" id="importModalDBId">
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                <p class="text-[11px] text-slate-400">Database Tujuan:</p>
+                <p class="font-mono font-bold text-emerald-400 text-sm" id="importModalDBName">-</p>
+                <p class="text-[10px] text-slate-500 font-mono" id="importModalEngine">-</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Pilih Berkas SQL (.sql)</label>
+                <input type="file" name="sql_file" accept=".sql" required
+                    class="w-full text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer">
+                <p class="text-[10px] text-slate-500 mt-1">Ukuran maksimal 128 MB. Perintah SQL akan dieksekusi langsung.</p>
+            </div>
+
+            <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 text-[11px]">
+                ⚠️ <strong>Peringatan:</strong> Proses import akan menjalankan seluruh query di dalam berkas ke database ini. Pastikan berkas SQL valid.
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeImportModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Mulai Import SQL
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openAddDBModal() {
+    document.getElementById('dbModalTitle').innerHTML = '<span>🗄️</span><span>Tambah / Tautkan Database</span>';
+    document.getElementById('modalDBId').value = '';
+    document.getElementById('modalDBDomain').value = '';
+    document.getElementById('modalDBEngine').value = 'mariadb';
+    document.getElementById('modalDBName').value = '';
+    document.getElementById('modalDBUser').value = '';
+    document.getElementById('modalDBPass').value = '';
+    document.getElementById('dbModal').classList.remove('hidden');
+}
+
+function openEditDBModal(id, domain, engine, dbName, dbUser, dbPass) {
+    document.getElementById('dbModalTitle').innerHTML = '<span>✏️</span><span>Edit Kredensial Database</span>';
+    document.getElementById('modalDBId').value = id;
+    document.getElementById('modalDBDomain').value = domain || '';
+    document.getElementById('modalDBEngine').value = engine || 'mariadb';
+    document.getElementById('modalDBName').value = dbName || '';
+    document.getElementById('modalDBUser').value = dbUser || '';
+    document.getElementById('modalDBPass').value = dbPass || '';
+    document.getElementById('dbModal').classList.remove('hidden');
+}
+
+function closeDBModal() {
+    document.getElementById('dbModal').classList.add('hidden');
+}
+
+function openImportModal(id, dbName, engine) {
+    document.getElementById('importModalDBId').value = id;
+    document.getElementById('importModalDBName').textContent = dbName;
+    document.getElementById('importModalEngine').textContent = 'Engine: ' + (engine === 'postgresql' ? 'PostgreSQL' : 'MariaDB');
+    document.getElementById('importModal').classList.remove('hidden');
+}
+
+function closeImportModal() {
+    document.getElementById('importModal').classList.add('hidden');
+}
+
+function generateRandomPass(elementId) {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let pass = "";
+    for (let i = 0; i < 16; i++) {
+        pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const input = document.getElementById(elementId);
+    if (input) {
+        input.value = pass;
+    }
+}
+</script>
+{{end}}

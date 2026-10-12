@@ -195,6 +195,7 @@ func (s *Server) initTemplates() error {
 	pages := []string{
 		"dashboard.html",
 		"vhosts.html",
+		"databases.html",
 		"services.html",
 		"php.html",
 		"users.html",
@@ -238,6 +239,7 @@ func (s *Server) SetupRouter() http.Handler {
 	// Web UI Pages
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 	mux.HandleFunc("GET /vhosts", s.handleVHostsPage)
+	mux.HandleFunc("GET /databases", s.handleDatabasesPage)
 	mux.HandleFunc("GET /files", s.handleFilesPage)
 	mux.HandleFunc("GET /files/edit", s.handleFileEditPage)
 	mux.HandleFunc("GET /services", s.handleServicesPage)
@@ -249,6 +251,10 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("POST /api/vhosts/create", s.handleAPIVHostCreate)
 	mux.HandleFunc("POST /api/vhosts/delete", s.handleAPIVHostDelete)
 	mux.HandleFunc("POST /api/vhosts/ssl", s.handleVHostSSL)
+	mux.HandleFunc("POST /api/databases/save", s.handleAPIDatabaseSave)
+	mux.HandleFunc("POST /api/databases/delete", s.handleAPIDatabaseDelete)
+	mux.HandleFunc("GET /api/databases/export", s.handleAPIDatabaseExport)
+	mux.HandleFunc("POST /api/databases/import", s.handleAPIDatabaseImport)
 	mux.HandleFunc("POST /api/services/action", s.handleAPIServiceAction)
 	mux.HandleFunc("POST /api/php/pool", s.handleAPIPHPPool)
 	mux.HandleFunc("POST /api/users/update", s.handleUpdateUser)

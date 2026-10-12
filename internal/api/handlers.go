@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/agus-salim/bsdpanel/internal/auth"
+	"github.com/agus-salim/bsdpanel/internal/database"
 	"github.com/agus-salim/bsdpanel/internal/php"
 	"github.com/agus-salim/bsdpanel/internal/system"
 	"github.com/agus-salim/bsdpanel/internal/webserver"
@@ -25,6 +27,7 @@ type PageData struct {
 	Stats        *system.SystemStats
 	Services     []system.ServiceStatus
 	VHosts       []webserver.VHostConfig
+	Databases    []database.DatabaseItem
 	Files        []FileInfo
 	CurrentPath  string
 	ParentPath   string
@@ -568,4 +571,175 @@ func (s *Server) handleAPIPHPPool(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/php", http.StatusSeeOther)
+}
+
+// Database Management Handlers
+
+func (s *Server) handleDatabasesPage(w http.ResponseWriter, r *http.Request) {
+	dbs := s.dbMgr.GetAll()
+
+	s.vhostsMu.RLock()
+	vhosts := make([]webserver.VHostConfig, len(s.vhostsList))
+	copy(vhosts, s.vhostsList)
+	s.vhostsMu.RUnlock()
+
+	data := PageData{
+		Title:        "Manajemen Database",
+		ActiveMenu:   "databases",
+		Username:     s.getUsername(r),
+		Databases:    dbs,
+		VHosts:       vhosts,
+		FlashSuccess: r.URL.Query().Get("msg"),
+		FlashError:   r.URL.Query().Get("err"),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = s.templates["databases.html"].ExecuteTemplate(w, "layout", data)
+}
+
+func (s *Server) handleAPIDatabaseSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/databases?err=Form+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	id := strings.TrimSpace(r.FormValue("id"))
+	domain := strings.TrimSpace(r.FormValue("domain"))
+	engine := strings.TrimSpace(r.FormValue("engine"))
+	dbName := strings.TrimSpace(r.FormValue("db_name"))
+	dbUser := strings.TrimSpace(r.FormValue("db_user"))
+	dbPass := strings.TrimSpace(r.FormValue("db_pass"))
+	createInDBMS := r.FormValue("create_dbms") == "1" || r.FormValue("create_dbms") == "true" || r.FormValue("create_dbms") == "on"
+
+	item := database.DatabaseItem{
+		ID:     id,
+		Domain: domain,
+		Engine: engine,
+		DBName: dbName,
+		DBUser: dbUser,
+		DBPass: dbPass,
+	}
+
+	if err := s.dbMgr.SaveOrUpdate(item, createInDBMS); err != nil {
+		redir := r.Header.Get("Referer")
+		if redir == "" {
+			redir = "/databases"
+		}
+		cleanRedir := strings.Split(redir, "?")[0]
+		http.Redirect(w, r, fmt.Sprintf("%s?err=%s", cleanRedir, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	// Sinkronkan ke vhost list jika ada domain terkait
+	if domain != "" {
+		s.vhostsMu.Lock()
+		for i, vh := range s.vhostsList {
+			if strings.EqualFold(vh.Domain, domain) {
+				s.vhostsList[i].DBEngine = engine
+				s.vhostsList[i].DBName = dbName
+				s.vhostsList[i].DBUser = dbUser
+				s.vhostsList[i].DBPass = dbPass
+				break
+			}
+		}
+		s.saveVHosts()
+		s.vhostsMu.Unlock()
+	}
+
+	redir := r.Header.Get("Referer")
+	if redir == "" {
+		redir = "/databases"
+	}
+	cleanRedir := strings.Split(redir, "?")[0]
+	http.Redirect(w, r, fmt.Sprintf("%s?msg=Database+%s+berhasil+disimpan!", cleanRedir, url.QueryEscape(dbName)), http.StatusSeeOther)
+}
+
+func (s *Server) handleAPIDatabaseDelete(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/databases?err=Form+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	id := strings.TrimSpace(r.FormValue("id"))
+	dropDBMS := r.FormValue("drop_dbms") == "1" || r.FormValue("drop_dbms") == "true"
+
+	item := s.dbMgr.GetByID(id)
+	domain := ""
+	if item != nil {
+		domain = item.Domain
+	}
+
+	if err := s.dbMgr.Delete(id, dropDBMS); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/databases?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	if domain != "" {
+		s.vhostsMu.Lock()
+		for i, vh := range s.vhostsList {
+			if strings.EqualFold(vh.Domain, domain) {
+				s.vhostsList[i].DBEngine = ""
+				s.vhostsList[i].DBName = ""
+				s.vhostsList[i].DBUser = ""
+				s.vhostsList[i].DBPass = ""
+				break
+			}
+		}
+		s.saveVHosts()
+		s.vhostsMu.Unlock()
+	}
+
+	redir := r.Header.Get("Referer")
+	if redir == "" {
+		redir = "/databases"
+	}
+	cleanRedir := strings.Split(redir, "?")[0]
+	http.Redirect(w, r, fmt.Sprintf("%s?msg=Database+berhasil+dihapus", cleanRedir), http.StatusSeeOther)
+}
+
+func (s *Server) handleAPIDatabaseExport(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		http.Error(w, "ID database tidak boleh kosong", http.StatusBadRequest)
+		return
+	}
+
+	data, filename, err := s.dbMgr.Export(id)
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/databases?err=%s", url.QueryEscape("Export gagal: "+err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/sql")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	_, _ = w.Write(data)
+}
+
+func (s *Server) handleAPIDatabaseImport(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(128 << 20); err != nil {
+		http.Redirect(w, r, "/databases?err=Gagal+mengunggah+file+SQL", http.StatusSeeOther)
+		return
+	}
+
+	id := strings.TrimSpace(r.FormValue("id"))
+	file, _, err := r.FormFile("sql_file")
+	if err != nil {
+		http.Redirect(w, r, "/databases?err=Pilih+file+SQL+terlebih+dahulu", http.StatusSeeOther)
+		return
+	}
+	defer file.Close()
+
+	sqlBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Redirect(w, r, "/databases?err=Gagal+membaca+file+SQL", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.dbMgr.Import(id, sqlBytes); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/databases?err=%s", url.QueryEscape("Import gagal: "+err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/databases?msg=File+SQL+berhasil+di-import+ke+database!", http.StatusSeeOther)
 }

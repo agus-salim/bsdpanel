@@ -74,7 +74,7 @@ func main() {
 	// Inisialisasi komponen sistem
 	runner := system.NewRunner(*dryRun || cfg.DemoMode)
 	authMgr := auth.NewAuthManager(cfg.SecretKey)
-	dbMgr := database.NewManager(runner)
+	dbMgr := database.NewManager(runner, cfg.DataDir)
 
 	// Template bawaan untuk Nginx VHost & PHP Pool
 	nginxTmpl := `# Nginx VHost Managed by bsdpanel

@@ -49,6 +49,14 @@
                                 <a href="{{if .SSLEnabled}}https://{{else}}http://{{end}}{{.Domain}}" target="_blank" class="text-emerald-400 hover:underline">
                                     {{.Domain}}
                                 </a>
+                                {{if .DBName}}
+                                <button type="button" onclick="openDatabaseModal('{{.Domain}}', '{{.DBEngine}}', '{{.DBName}}', '{{.DBUser}}', '{{.DBPass}}')"
+                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20 transition cursor-pointer"
+                                    title="Database Terhubung: {{.DBName}} ({{.DBEngine}})">
+                                    <span>🗄️</span>
+                                    <span class="ml-1">{{.DBName}}</span>
+                                </button>
+                                {{end}}
                             </div>
                         </td>
                         <td class="p-3.5 whitespace-nowrap">
@@ -82,6 +90,12 @@
                         </td>
                         <td class="p-3.5 font-mono text-slate-400 text-[11px]">{{.DocumentRoot}}</td>
                         <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                            <!-- Icon Database Situs -->
+                            <button type="button" onclick="openDatabaseModal('{{.Domain}}', '{{.DBEngine}}', '{{.DBName}}', '{{.DBUser}}', '{{.DBPass}}')" title="Tautkan / Kelola Database Situs"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-teal-300 rounded border border-slate-700 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                            </button>
+
                             <!-- Icon File Manager -->
                             <a href="/files?path={{.DocumentRoot}}" title="Buka File Manager"
                                 class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-yellow-400 hover:text-yellow-300 rounded border border-slate-700 transition shadow-sm">
@@ -262,10 +276,102 @@
     </div>
 </div>
 
+<!-- Modal Tautkan / Set Database Virtual Host -->
+<div id="vhostDBModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>🗄️</span>
+                <span>Tautkan Database ke Domain</span>
+            </h3>
+            <button type="button" onclick="closeVHostDBModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <form method="POST" action="/api/databases/save" class="space-y-4 text-xs">
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Domain Situs</label>
+                <input type="text" name="domain" id="vhostDBDomain" readonly
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-teal-400 font-mono font-medium focus:outline-none cursor-not-allowed">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Tipe Database Engine</label>
+                <select name="engine" id="vhostDBEngine" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                    <option value="mariadb">MariaDB / MySQL (Port 3306)</option>
+                    <option value="postgresql">PostgreSQL (Port 5432)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Nama Database</label>
+                <input type="text" name="db_name" id="vhostDBName" required placeholder="contoh: cms_db"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">User Database</label>
+                <input type="text" name="db_user" id="vhostDBUser" required placeholder="contoh: cms_user"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-slate-300 font-semibold">Password Database</label>
+                    <button type="button" onclick="generateVHostDBPass()" class="text-[11px] text-teal-400 hover:text-teal-300">
+                        ⚡ Generate Password
+                    </button>
+                </div>
+                <input type="text" name="db_pass" id="vhostDBPass" required placeholder="Password kuat..."
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" name="create_dbms" value="1" checked class="rounded border-slate-700 text-teal-600 focus:ring-teal-500">
+                    <span class="text-[11px] text-slate-300 font-medium">Buat otomatis di database server jika belum ada</span>
+                </label>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeVHostDBModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Simpan Database
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Script AJAX Pemanggilan SSL dengan Animasi Loading -->
 <script>
 let timerInterval = null;
 let secondsElapsed = 0;
+
+function openDatabaseModal(domain, engine, dbName, dbUser, dbPass) {
+    document.getElementById('vhostDBDomain').value = domain || '';
+    document.getElementById('vhostDBEngine').value = engine || 'mariadb';
+    document.getElementById('vhostDBName').value = dbName || '';
+    document.getElementById('vhostDBUser').value = dbUser || '';
+    document.getElementById('vhostDBPass').value = dbPass || '';
+    if (!dbPass) {
+        generateVHostDBPass();
+    }
+    document.getElementById('vhostDBModal').classList.remove('hidden');
+}
+
+function closeVHostDBModal() {
+    document.getElementById('vhostDBModal').classList.add('hidden');
+}
+
+function generateVHostDBPass() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=';
+    let pass = '';
+    for (let i = 0; i < 16; i++) {
+        pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const input = document.getElementById('vhostDBPass');
+    if (input) input.value = pass;
+}
 
 function startSSLTimer() {
     secondsElapsed = 0;

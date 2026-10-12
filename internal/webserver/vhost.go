@@ -25,6 +25,10 @@ type VHostConfig struct {
 	SSLEnabled   bool     `json:"ssl_enabled"`
 	SSLCertPath  string   `json:"ssl_cert_path"`
 	SSLKeyPath   string   `json:"ssl_key_path"`
+	DBEngine     string   `json:"db_engine,omitempty"` // "mariadb" atau "postgresql"
+	DBName       string   `json:"db_name,omitempty"`
+	DBUser       string   `json:"db_user,omitempty"`
+	DBPass       string   `json:"db_pass,omitempty"`
 	CreatedAt    string   `json:"created_at"`
 }
 
