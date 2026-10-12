@@ -94,12 +94,23 @@ fi
 # 5. Pasang Binary & Skrip rc.d
 printf "%s\n" "${YELLOW}[3/5] Memasang binary bsdpanel...${NC}"
 
+# Helper download menggunakan curl atau FreeBSD fetch bawaan
+download_file() {
+    URL="$1"
+    DEST="$2"
+    if which curl >/dev/null 2>&1; then
+        curl -sSL "$URL" -o "$DEST"
+    elif which fetch >/dev/null 2>&1; then
+        fetch -q -o "$DEST" "$URL"
+    fi
+}
+
 # Cek binary lokal hasil kompilasi
 if [ -f "./bin/freebsd_amd64/bsdpanel" ]; then
     printf "%s\n" "[INFO] Menggunakan binary lokal ./bin/freebsd_amd64/bsdpanel..."
     install -m 755 ./bin/freebsd_amd64/bsdpanel /usr/local/sbin/bsdpanel
 elif [ -f "./cmd/bsdpanel/main.go" ]; then
-    printf "%s\n" "[INFO] Mengompilasi bsdpanel langsung dari kode sumber..."
+    printf "%s\n" "[INFO] Mengompilasi bsdpanel langsung dari kode sumber lokal..."
     if ! which go >/dev/null 2>&1; then
         pkg install -y go
     fi
@@ -109,19 +120,40 @@ else
     RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/bsdpanel-freebsd-amd64.tar.gz"
     printf "%s\n" "[INFO] Mengunduh binary rilis dari GitHub..."
     TMP_DIR=$(mktemp -d)
-    curl -sSL "$RELEASE_URL" -o "$TMP_DIR/bsdpanel.tar.gz" || true
-    if [ -f "$TMP_DIR/bsdpanel.tar.gz" ]; then
+    download_file "$RELEASE_URL" "$TMP_DIR/bsdpanel.tar.gz" || true
+    if [ -s "$TMP_DIR/bsdpanel.tar.gz" ]; then
         tar -xzf "$TMP_DIR/bsdpanel.tar.gz" -C "$TMP_DIR"
         install -m 755 "$TMP_DIR/bsdpanel" /usr/local/sbin/bsdpanel
         rm -rf "$TMP_DIR"
     else
-        printf "%s\n" "${RED}[ERROR] Binary tidak ditemukan. Silakan jalankan 'pkg install -y go && go build -o /usr/local/sbin/bsdpanel ./cmd/bsdpanel'${NC}"
-        exit 1
+        printf "%s\n" "[INFO] Mengunduh kode sumber terbaru dari GitHub main branch..."
+        SRC_URL="https://github.com/${GITHUB_REPO}/archive/refs/heads/main.tar.gz"
+        download_file "$SRC_URL" "$TMP_DIR/src.tar.gz" || true
+        if [ -s "$TMP_DIR/src.tar.gz" ]; then
+            tar -xzf "$TMP_DIR/src.tar.gz" -C "$TMP_DIR"
+            if ! which go >/dev/null 2>&1; then
+                pkg install -y go
+            fi
+            (cd "$TMP_DIR/bsdpanel-main" && go build -ldflags="-s -w" -o /usr/local/sbin/bsdpanel ./cmd/bsdpanel)
+            if [ ! -f "./scripts/bsdpanel.rc" ] && [ -f "$TMP_DIR/bsdpanel-main/scripts/bsdpanel.rc" ]; then
+                install -m 555 "$TMP_DIR/bsdpanel-main/scripts/bsdpanel.rc" /usr/local/etc/rc.d/bsdpanel
+            fi
+            rm -rf "$TMP_DIR"
+        else
+            printf "%s\n" "${RED}[ERROR] Gagal mengunduh bsdpanel dari GitHub.${NC}"
+            exit 1
+        fi
     fi
 fi
 
 # Pasang script rc.d
-install -m 555 ./scripts/bsdpanel.rc /usr/local/etc/rc.d/bsdpanel
+if [ -f "./scripts/bsdpanel.rc" ]; then
+    install -m 555 ./scripts/bsdpanel.rc /usr/local/etc/rc.d/bsdpanel
+elif [ ! -f "/usr/local/etc/rc.d/bsdpanel" ]; then
+    printf "%s\n" "[INFO] Mengunduh skrip rc.d bsdpanel..."
+    download_file "https://raw.githubusercontent.com/agus-salim/bsdpanel/main/scripts/bsdpanel.rc" "/usr/local/etc/rc.d/bsdpanel"
+    chmod 555 /usr/local/etc/rc.d/bsdpanel
+fi
 
 # 6. Konfigurasi rc.conf FreeBSD
 printf "%s\n" "${YELLOW}[4/5] Mengonfigurasi layanan di /etc/rc.conf...${NC}"
