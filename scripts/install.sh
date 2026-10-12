@@ -44,13 +44,12 @@ VERSION=$(uname -r)
 echo "${GREEN}[INFO] Sistem terverifikasi: FreeBSD $VERSION ($ARCH)${NC}"
 
 # 3. Instalasi Dependensi Dasar via pkg
-echo "${YELLOW}[1/5] Memperbarui repo pkg dan memasang dependensi dasar...${NC}"
-ASSUME_ALWAYS_YES=YES pkg bootstrap -y || true
+printf "%b\n" "${YELLOW}[1/5] Memperbarui repo pkg dan memasang dependensi dasar...${NC}"
 pkg install -y ca_root_nss curl nginx mariadb1011-server \
-    php83 php83-fpm php83-curl php83-mysqli php83-pdo_mysql php83-mbstring php83-zip php83-gd
+    php83 php83-curl php83-mysqli php83-pdo_mysql php83-mbstring php83-zip php83-gd
 
 # 4. Buat Direktori Konfigurasi
-echo "${YELLOW}[2/5] Menyiapkan struktur direktori...${NC}"
+printf "%b\n" "${YELLOW}[2/5] Menyiapkan struktur direktori...${NC}"
 mkdir -p /usr/local/etc/bsdpanel
 mkdir -p /usr/local/etc/nginx/conf.d
 mkdir -p /usr/local/etc/php-fpm.d
@@ -60,30 +59,38 @@ mkdir -p /home
 chmod 750 /usr/local/etc/bsdpanel
 
 # 5. Pasang Binary & Skrip rc.d
-echo "${YELLOW}[3/5] Memasang binary bsdpanel...${NC}"
-GITHUB_REPO="agus-salim/bsdpanel"
-RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/bsdpanel-freebsd-amd64.tar.gz"
+printf "%b\n" "${YELLOW}[3/5] Memasang binary bsdpanel...${NC}"
 
-# Unduh tarball rilis jika tersedia, atau ambil binary lokal jika running dari git repo
+# Cek binary lokal hasil kompilasi
 if [ -f "./bin/freebsd_amd64/bsdpanel" ]; then
-    echo "[INFO] Menggunakan binary lokal hasil kompilasi repository..."
+    printf "%s\n" "[INFO] Menggunakan binary lokal ./bin/freebsd_amd64/bsdpanel..."
     install -m 755 ./bin/freebsd_amd64/bsdpanel /usr/local/sbin/bsdpanel
-    install -m 555 ./scripts/bsdpanel.rc /usr/local/etc/rc.d/bsdpanel
+elif [ -f "./cmd/bsdpanel/main.go" ]; then
+    # Jika source code tersedia, kompilasi langsung di FreeBSD
+    printf "%s\n" "[INFO] Mengompilasi bsdpanel langsung dari kode sumber..."
+    if ! which go >/dev/null 2>&1; then
+        pkg install -y go
+    fi
+    go build -ldflags="-s -w" -o /usr/local/sbin/bsdpanel ./cmd/bsdpanel
 else
-    echo "[INFO] Mengunduh rilis binary dari GitHub..."
+    # Coba download release asset
+    GITHUB_REPO="agus-salim/bsdpanel"
+    RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/bsdpanel-freebsd-amd64.tar.gz"
+    printf "%s\n" "[INFO] Mengunduh binary rilis dari GitHub..."
     TMP_DIR=$(mktemp -d)
     curl -sSL "$RELEASE_URL" -o "$TMP_DIR/bsdpanel.tar.gz" || true
     if [ -f "$TMP_DIR/bsdpanel.tar.gz" ]; then
         tar -xzf "$TMP_DIR/bsdpanel.tar.gz" -C "$TMP_DIR"
         install -m 755 "$TMP_DIR/bsdpanel" /usr/local/sbin/bsdpanel
-        install -m 555 "$TMP_DIR/bsdpanel.rc" /usr/local/etc/rc.d/bsdpanel
         rm -rf "$TMP_DIR"
     else
-        echo "${YELLOW}[WARN] Gagal mengunduh release asset. Pastikan rilis GitHub sudah dipublish.${NC}"
-        echo "${YELLOW}       Jika Anda sudah clone repo, jalankan: 'make build-freebsd && ./scripts/install.sh'${NC}"
+        printf "%b\n" "${RED}[ERROR] Binary tidak ditemukan. Silakan jalankan 'pkg install -y go && go build -o /usr/local/sbin/bsdpanel ./cmd/bsdpanel'${NC}"
         exit 1
     fi
 fi
+
+# Pasang script rc.d
+install -m 555 ./scripts/bsdpanel.rc /usr/local/etc/rc.d/bsdpanel
 
 # 6. Konfigurasi rc.conf FreeBSD
 echo "${YELLOW}[4/5] Mengonfigurasi layanan di /etc/rc.conf...${NC}"
