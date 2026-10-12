@@ -197,6 +197,9 @@
             backdrop.addEventListener('click', () => toggleSidebar(false));
         }
     </script>
+
+    <!-- Modals Layer (Direct child of body to guarantee full screen overlay without clipping) -->
+    {{block "modals" .}}{{end}}
 </body>
 </html>
 {{end}}

@@ -119,7 +119,7 @@ func (s *Server) loadVHosts() {
 				continue
 			}
 
-			vh := parseVHostFromConf(domain, string(confBytes))
+			vh := s.parseVHostFromConf(domain, string(confBytes))
 			s.vhostsList = append(s.vhostsList, vh)
 			existingMap[domain] = true
 			updated = true
@@ -130,7 +130,7 @@ func (s *Server) loadVHosts() {
 	}
 }
 
-func parseVHostFromConf(domain, content string) webserver.VHostConfig {
+func (s *Server) parseVHostFromConf(domain, content string) webserver.VHostConfig {
 	vh := webserver.VHostConfig{
 		Domain:       domain,
 		User:         "www",
@@ -149,9 +149,6 @@ func parseVHostFromConf(domain, content string) webserver.VHostConfig {
 				vh.DocumentRoot = r
 			}
 		}
-		if strings.Contains(trimmed, "443 ssl") {
-			vh.SSLEnabled = true
-		}
 		if strings.Contains(trimmed, "fastcgi_pass unix:/var/run/") {
 			parts := strings.Split(trimmed, "/var/run/")
 			if len(parts) > 1 {
@@ -168,13 +165,17 @@ func parseVHostFromConf(domain, content string) webserver.VHostConfig {
 
 	certPaths := []string{
 		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s/fullchain.pem", domain),
+		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s-0001/fullchain.pem", domain),
 		fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain),
 	}
+	vh.SSLEnabled = false
 	for _, cp := range certPaths {
 		if _, err := os.Stat(cp); err == nil {
-			vh.SSLEnabled = true
-			vh.SSLCertPath = cp
-			break
+			if webserver.IsRealLetsEncryptCert(s.sysRunner, cp) {
+				vh.SSLEnabled = true
+				vh.SSLCertPath = cp
+				break
+			}
 		}
 	}
 

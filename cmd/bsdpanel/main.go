@@ -86,6 +86,8 @@ server {
     # Let's Encrypt ACME Challenge
     location /.well-known/acme-challenge/ {
         root {{.DocumentRoot}};
+        allow all;
+        default_type "text/plain";
         try_files $uri =404;
     }
 

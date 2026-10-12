@@ -455,7 +455,7 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 	if target == nil {
 		confPath := filepath.Join(s.cfg.VHostDir, domain+".conf")
 		if confBytes, err := os.ReadFile(confPath); err == nil {
-			newVh := parseVHostFromConf(domain, string(confBytes))
+			newVh := s.parseVHostFromConf(domain, string(confBytes))
 			s.vhostsList = append(s.vhostsList, newVh)
 			target = &s.vhostsList[len(s.vhostsList)-1]
 			s.saveVHosts()
@@ -468,18 +468,12 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Terbitkan sertifikat Let's Encrypt
-	err := s.vhostMgr.IssueSSL(domain, target.DocumentRoot)
+	err := s.vhostMgr.IssueSSL(target)
 	if err != nil {
 		target.SSLEnabled = false
 		_ = s.vhostMgr.CreateOrUpdate(target)
 		s.saveVHosts()
-		s.respondSSL(w, r, isJSON, false, "Gagal menerbitkan Let's Encrypt: "+err.Error())
-		return
-	}
-
-	target.SSLEnabled = true
-	if err := s.vhostMgr.CreateOrUpdate(target); err != nil {
-		s.respondSSL(w, r, isJSON, false, "Gagal memperbarui konfigurasi webserver: "+err.Error())
+		s.respondSSL(w, r, isJSON, false, err.Error())
 		return
 	}
 

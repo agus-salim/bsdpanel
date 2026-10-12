@@ -184,8 +184,9 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 }
 
 // IssueSSL menerbitkan sertifikat resmi Let's Encrypt menggunakan Certbot.
-func (m *Manager) IssueSSL(domain, docRoot string) error {
-	docRoot = filepath.Clean(docRoot)
+func (m *Manager) IssueSSL(vh *VHostConfig) error {
+	domain := vh.Domain
+	docRoot := NormalizeDocRoot(vh.User, vh.DocumentRoot)
 
 	// Pastikan parent directory dan docRoot dapat diakses publik oleh Nginx (user www)
 	parentDir := filepath.Dir(docRoot)
@@ -197,19 +198,26 @@ func (m *Manager) IssueSSL(domain, docRoot string) error {
 	_ = os.MkdirAll(acmeDir, 0755)
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "-R", "755", filepath.Join(docRoot, ".well-known"))
 
+	// Hapus sertifikat self-signed palsu lama jika belum ada renewal config resmi Let's Encrypt
+	renewalConf := fmt.Sprintf("/usr/local/etc/letsencrypt/renewal/%s.conf", domain)
+	if !fileExists(renewalConf) {
+		_ = os.RemoveAll(filepath.Join("/usr/local/etc/letsencrypt/live", domain))
+		_ = os.RemoveAll(filepath.Join("/usr/local/etc/letsencrypt/archive", domain))
+	}
+
 	// Cek apakah certbot terpasang di FreeBSD; jika belum, otomatis install
-	if !fileExists("/usr/local/bin/certbot") {
+	if !m.isCertbotInstalled() {
 		_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "security/py-certbot", "security/py-certbot-nginx")
-		if !fileExists("/usr/local/bin/certbot") {
+		if !m.isCertbotInstalled() {
 			_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "py312-certbot", "py312-certbot-nginx")
 		}
-		if !fileExists("/usr/local/bin/certbot") {
+		if !m.isCertbotInstalled() {
 			_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "certbot")
 		}
 	}
 
-	// Jalankan Certbot resmi Let's Encrypt dengan webroot mode
-	res, _ := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
+	// 1. Jalankan Certbot resmi Let's Encrypt dengan webroot mode
+	resWebroot, errWebroot := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
 		"--webroot",
 		"-w", docRoot,
 		"-d", domain,
@@ -219,52 +227,85 @@ func (m *Manager) IssueSSL(domain, docRoot string) error {
 		"--force-renewal",
 	)
 
-	// Cek apakah berkas sertifikat resmi Let's Encrypt berhasil dibuat
-	certPaths := []string{
-		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s/fullchain.pem", domain),
-		fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain),
-	}
+	// Cari sertifikat resmi Let's Encrypt
+	foundCert, foundKey := m.findValidLetsEncryptCert(domain)
 
-	var foundCert string
-	for _, cp := range certPaths {
-		if fileExists(cp) {
-			foundCert = cp
-			break
-		}
-	}
-
+	// 2. Jika webroot belum membuahkan hasil, coba metode Nginx plugin
 	if foundCert == "" {
-		// Coba metode nginx plugin jika webroot belum membuahkan hasil
 		resNginx, _ := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
 			"--nginx",
 			"-d", domain,
 			"--non-interactive",
 			"--agree-tos",
 			"--register-unsafely-without-email",
+			"--force-renewal",
 		)
-		for _, cp := range certPaths {
-			if fileExists(cp) {
-				foundCert = cp
-				break
-			}
-		}
+		foundCert, foundKey = m.findValidLetsEncryptCert(domain)
 
 		if foundCert == "" {
-			errMsg := strings.TrimSpace(res.Stderr)
+			errMsg := strings.TrimSpace(resWebroot.Stderr)
 			if errMsg == "" {
-				errMsg = strings.TrimSpace(res.Stdout)
+				errMsg = strings.TrimSpace(resWebroot.Stdout)
 			}
 			if errMsg == "" && resNginx.Stderr != "" {
 				errMsg = strings.TrimSpace(resNginx.Stderr)
 			}
 			if errMsg == "" {
-				errMsg = "Tidak ada berkas sertifikat yang dihasilkan oleh Certbot."
+				errMsg = strings.TrimSpace(resNginx.Stdout)
 			}
-			return fmt.Errorf("Certbot gagal menerbitkan sertifikat: %s", errMsg)
+			if errMsg == "" && errWebroot != nil {
+				errMsg = errWebroot.Error()
+			}
+			if errMsg == "" {
+				errMsg = "Certbot tidak menghasilkan sertifikat resmi Let's Encrypt. Pastikan DNS domain telah mengarah ke server ini."
+			}
+			return fmt.Errorf("Certbot gagal menerbitkan sertifikat Let's Encrypt: %s", errMsg)
 		}
 	}
 
-	return nil
+	vh.SSLCertPath = foundCert
+	vh.SSLKeyPath = foundKey
+	vh.SSLEnabled = true
+
+	return m.CreateOrUpdate(vh)
+}
+
+func (m *Manager) isCertbotInstalled() bool {
+	res, err := m.runner.ExecWithTimeout(5*time.Second, "certbot", "--version")
+	return err == nil && res.ExitCode == 0
+}
+
+func (m *Manager) findValidLetsEncryptCert(domain string) (string, string) {
+	candidates := []string{
+		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s", domain),
+		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s-0001", domain),
+		fmt.Sprintf("/etc/letsencrypt/live/%s", domain),
+		fmt.Sprintf("/etc/letsencrypt/live/%s-0001", domain),
+	}
+
+	for _, dir := range candidates {
+		cert := filepath.Join(dir, "fullchain.pem")
+		key := filepath.Join(dir, "privkey.pem")
+		if fileExists(cert) && fileExists(key) {
+			if IsRealLetsEncryptCert(m.runner, cert) {
+				return cert, key
+			}
+		}
+	}
+	return "", ""
+}
+
+// IsRealLetsEncryptCert memeriksa apakah berkas sertifikat benar-benar diterbitkan oleh Let's Encrypt resmi.
+func IsRealLetsEncryptCert(runner system.Runner, certPath string) bool {
+	if certPath == "" || !fileExists(certPath) {
+		return false
+	}
+	res, err := runner.ExecWithTimeout(5*time.Second, "openssl", "x509", "-in", certPath, "-noout", "-issuer")
+	if err != nil || res.ExitCode != 0 {
+		return false
+	}
+	issuer := strings.ToLower(res.Stdout)
+	return strings.Contains(issuer, "let's encrypt") || strings.Contains(issuer, "isrg")
 }
 
 func fileExists(path string) bool {
