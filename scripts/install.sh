@@ -51,8 +51,10 @@ printf "%s\n" "${GREEN}[INFO] Sistem terverifikasi: FreeBSD $VERSION ($ARCH)${NC
 
 # 3. Instalasi Dependensi Dasar via pkg
 printf "%s\n" "${YELLOW}[1/5] Memperbarui repo pkg dan memasang dependensi dasar...${NC}"
-pkg install -y ca_root_nss curl nginx apache24 mariadb1011-server postgresql16-server \
-    php83 php83-curl php83-mysqli php83-pdo_mysql php83-mbstring php83-zip php83-gd \
+pkg install -y ca_root_nss curl nginx apache24 mariadb1011-server \
+    php83 php83-curl php83-mysqli php83-pdo_mysql php83-pdo_pgsql php83-pgsql \
+    php83-session php83-filter php83-ctype php83-tokenizer php83-dom php83-xml \
+    php83-iconv php83-intl php83-fileinfo php83-mbstring php83-zip php83-gd \
     security/py-certbot security/py-certbot-nginx || \
 pkg install -y py312-certbot py312-certbot-nginx || true
 
