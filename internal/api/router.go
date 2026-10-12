@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -253,7 +255,28 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("POST /api/files/save", s.handleFileSave)
 	mux.HandleFunc("POST /api/files/delete", s.handleFileDelete)
 
-	return s.authMiddleware(s.loggingMiddleware(mux))
+	return s.recoveryMiddleware(s.authMiddleware(s.loggingMiddleware(mux)))
+}
+
+func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("[PANIC RECOVERED] %v\nStack: %s", rec, debug.Stack())
+				if strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.URL.Path, "/api/") {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusInternalServerError)
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"success": false,
+						"error":   fmt.Sprintf("Terjadi kesalahan internal server: %v", rec),
+					})
+				} else {
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				}
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {

@@ -179,9 +179,9 @@ php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
 	httpServer := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      srv.SetupRouter(),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 300 * time.Second, // 5 menit untuk proses ACME Let's Encrypt / instalasi paket
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Channel shutdown anggun (graceful shutdown)

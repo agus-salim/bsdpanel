@@ -27,7 +27,7 @@ load_rc_config $name
 pidfile="/var/run/${name}.pid"
 procname="/usr/local/sbin/bsdpanel"
 command="/usr/sbin/daemon"
-command_args="-c -f -p ${pidfile} ${procname} -config ${bsdpanel_config} -listen ${bsdpanel_listen}"
+command_args="-c -r -f -p ${pidfile} ${procname} -config ${bsdpanel_config} -listen ${bsdpanel_listen}"
 
 start_precmd="bsdpanel_prestart"
 

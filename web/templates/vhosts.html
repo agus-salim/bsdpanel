@@ -263,7 +263,14 @@ async function issueSSL(domain) {
             }
         });
 
-        const data = await response.json();
+        let data;
+        const rawText = await response.text();
+        try {
+            data = JSON.parse(rawText);
+        } catch (jsonErr) {
+            throw new Error(rawText || ('Server merespons kode status ' + response.status));
+        }
+
         loadingState.classList.add('hidden');
 
         if (data.success) {
@@ -275,7 +282,7 @@ async function issueSSL(domain) {
             }, 2500);
         } else {
             errorState.classList.remove('hidden');
-            errorMsg.textContent = data.error || 'Terjadi kegagalan saat memproses sertifikat Let\'s Encrypt.';
+            errorMsg.textContent = data.error || data.message || 'Terjadi kegagalan saat memproses sertifikat Let\'s Encrypt.';
         }
     } catch (err) {
         loadingState.classList.add('hidden');
