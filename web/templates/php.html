@@ -1,61 +1,918 @@
 {{define "content"}}
 <div class="space-y-6">
 
-    <div>
-        <h3 class="text-base font-bold text-white">Manajemen Konfigurasi PHP (PHP-FPM Pool & php.ini)</h3>
-        <p class="text-xs text-slate-400 mt-1">Konfigurasi batas resource PHP terisolasi per user akun tanpa mempengaruhi akun lain di server.</p>
+    <!-- Header & Deskripsi -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h3 class="text-xl font-bold text-white flex items-center space-x-2.5">
+                <span class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                </span>
+                <span>PHP Management & Multi-Version</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Daftar versi PHP FreeBSD (PHP 8.2 s/d PHP 8.5), konfigurasi runtime php.ini, dan manajemen ekstensi modul.</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="window.location.reload()" class="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center space-x-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span>Segarkan</span>
+            </button>
+        </div>
     </div>
 
-    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-sm max-w-2xl">
-        <form method="POST" action="/api/php/pool" class="space-y-5 text-xs">
+    <!-- Flash Pesan -->
+    {{if .FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl text-xs flex items-center space-x-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span>{{.FlashSuccess}}</span>
+    </div>
+    {{end}}
+    {{if .FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center space-x-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>{{.FlashError}}</span>
+    </div>
+    {{end}}
+
+    <!-- Ringkasan Info Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Versi Tersedia</span>
+            <div class="text-xl font-bold text-white mt-1">4 Versi</div>
+            <span class="text-[10px] text-slate-500 font-mono">PHP 8.2 s/d PHP 8.5</span>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Status Daemon FPM</span>
+            <div class="flex items-center space-x-2 mt-1">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-base font-bold text-emerald-400">php_fpm Active</span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono">FastCGI Process Manager</span>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Paket Package OS</span>
+            <div class="text-base font-bold text-slate-200 mt-1">FreeBSD pkg</div>
+            <span class="text-[10px] text-slate-500 font-mono">/usr/local/sbin/pkg</span>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Direktori Konfig</span>
+            <div class="text-xs font-mono font-semibold text-indigo-400 mt-1 truncate" title="/usr/local/etc/php.ini">/usr/local/etc/php.ini</div>
+            <span class="text-[10px] text-slate-500 font-mono">ext: /usr/local/etc/php/</span>
+        </div>
+    </div>
+
+    <!-- Tabel Daftar Versi PHP (PHP 8.2 s/d PHP 8.5) -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
             <div>
-                <label class="block text-slate-300 font-semibold mb-1">User Akun UNIX</label>
-                <input type="text" name="user" required value="webuser1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                <h4 class="text-sm font-bold text-white">Daftar Versi PHP</h4>
+                <p class="text-xs text-slate-400 mt-0.5">Pilih versi PHP untuk mengelola paket, mengatur php.ini, dan modul ekstensi.</p>
             </div>
+            <span class="text-[11px] font-mono bg-slate-800 px-2.5 py-1 rounded-md text-slate-300 border border-slate-700">
+                Port FreeBSD Native
+            </span>
+        </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-slate-300 font-semibold mb-1">Versi PHP</label>
-                    <select name="php_version" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
-                        <option value="php83">PHP 8.3 (FreeBSD pkg)</option>
-                        <option value="php82">PHP 8.2 (FreeBSD pkg)</option>
-                        <option value="php81">PHP 8.1 (FreeBSD pkg)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-slate-300 font-semibold mb-1">Memory Limit</label>
-                    <select name="memory_limit" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
-                        <option value="128M">128M (Standar)</option>
-                        <option value="256M" selected>256M (Direkomendasikan)</option>
-                        <option value="512M">512M (Tinggi)</option>
-                        <option value="1024M">1024M (Enterprise)</option>
-                    </select>
-                </div>
-            </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-950/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                    <tr>
+                        <th class="py-3 px-5">Versi PHP</th>
+                        <th class="py-3 px-4">Paket FreeBSD</th>
+                        <th class="py-3 px-4">Status Instalasi</th>
+                        <th class="py-3 px-4">Modul Ekstensi</th>
+                        <th class="py-3 px-5 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800 font-sans">
+                    {{range .PHPVersions}}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <!-- Kolom Versi PHP -->
+                        <td class="py-4 px-5">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl {{if .Installed}}bg-indigo-500/20 text-indigo-400 border border-indigo-500/30{{else}}bg-slate-800 text-slate-500 border border-slate-700{{end}} flex items-center justify-center font-bold text-sm font-mono shadow-sm">
+                                    {{.Version}}
+                                </div>
+                                <div>
+                                    <div class="font-bold text-white text-sm flex items-center space-x-2">
+                                        <span>PHP {{.Version}}</span>
+                                        {{if eq .Key "php83"}}
+                                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">Default</span>
+                                        {{end}}
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 font-mono mt-0.5">
+                                        {{if .Installed}}
+                                            {{if .FullVersion}}v{{.FullVersion}}{{else}}Terpasang{{end}}
+                                        {{else}}
+                                            Belum terpasang di sistem
+                                        {{end}}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-slate-300 font-semibold mb-1">Upload Max Filesize</label>
-                    <select name="upload_max_filesize" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
-                        <option value="32M">32M</option>
-                        <option value="64M" selected>64M</option>
-                        <option value="128M">128M</option>
-                        <option value="256M">256M</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-slate-300 font-semibold mb-1">Max Execution Time (Detik)</label>
-                    <input type="number" name="max_execution_time" value="60" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
-                </div>
-            </div>
+                        <!-- Kolom Paket FreeBSD -->
+                        <td class="py-4 px-4 font-mono">
+                            <span class="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-md text-slate-300 text-xs">
+                                {{.PkgName}}
+                            </span>
+                        </td>
 
-            <div class="pt-4 border-t border-slate-800 flex justify-end">
-                <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
-                    Simpan & Reload PHP-FPM
-                </button>
+                        <!-- Kolom Status -->
+                        <td class="py-4 px-4">
+                            <div class="space-y-1">
+                                {{if .Installed}}
+                                    <div class="flex items-center space-x-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+                                            Terinstall
+                                        </span>
+                                        {{if eq .FPMStatus "running"}}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                                            FPM Aktif
+                                        </span>
+                                        {{end}}
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 font-mono truncate max-w-[200px]" title="{{.BinPath}}">
+                                        {{.BinPath}}
+                                    </div>
+                                {{else}}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                                        Belum Terinstall
+                                    </span>
+                                {{end}}
+                            </div>
+                        </td>
+
+                        <!-- Kolom Ekstensi -->
+                        <td class="py-4 px-4">
+                            {{if .Installed}}
+                            <div class="space-y-1">
+                                <div class="flex items-center space-x-1.5 text-xs font-semibold text-slate-200">
+                                    <span class="text-emerald-400 font-mono">{{.ActiveExts}}</span>
+                                    <span class="text-slate-500">/</span>
+                                    <span class="text-slate-400 font-mono">{{.TotalExts}}</span>
+                                    <span class="text-[11px] text-slate-400 font-normal">Aktif</span>
+                                </div>
+                                <div class="w-28 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div class="bg-emerald-500 h-full rounded-full" style="width: calc(({{.ActiveExts}} / {{.TotalExts}}) * 100%)"></div>
+                                </div>
+                            </div>
+                            {{else}}
+                            <span class="text-slate-600">-</span>
+                            {{end}}
+                        </td>
+
+                        <!-- Kolom Aksi -->
+                        <td class="py-4 px-5 text-right">
+                            <div class="flex items-center justify-end space-x-2">
+                                {{if .Installed}}
+                                    <!-- Tombol Konfig php.ini -->
+                                    <button type="button" onclick="openIniModal('{{.Key}}', '{{.Version}}')"
+                                        title="Konfigurasi php.ini"
+                                        class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 rounded-lg transition text-xs font-semibold flex items-center space-x-1.5 shadow-sm">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                                        <span>Konfig</span>
+                                    </button>
+
+                                    <!-- Tombol Ekstensi -->
+                                    <button type="button" onclick="openExtModal('{{.Key}}', '{{.Version}}')"
+                                        title="Kelola Ekstensi PHP"
+                                        class="px-3 py-1.5 bg-teal-600/20 hover:bg-teal-600/30 text-teal-400 hover:text-teal-300 border border-teal-500/30 rounded-lg transition text-xs font-semibold flex items-center space-x-1.5 shadow-sm">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+                                        <span>Ekstensi</span>
+                                    </button>
+
+                                    <!-- Tombol Hapus -->
+                                    <button type="button" onclick="openUninstallModal('{{.Key}}', '{{.Version}}')"
+                                        title="Hapus Instalasi PHP"
+                                        class="p-1.5 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-lg transition">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    </button>
+                                {{else}}
+                                    <!-- Tombol Pasang / Install -->
+                                    <button type="button" onclick="openInstallModal('{{.Key}}', '{{.Version}}')"
+                                        class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition text-xs font-semibold flex items-center space-x-1.5 shadow-sm">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                        <span>Pasang PHP {{.Version}}</span>
+                                    </button>
+                                {{end}}
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Accordion: Konfigurasi Pool PHP-FPM per Akun UNIX (Fitur Kompatibilitas) -->
+    <div class="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
+        <button type="button" onclick="togglePoolAccordion()" class="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-slate-800/40 transition">
+            <div class="flex items-center space-x-2.5">
+                <span class="p-1.5 bg-slate-800 text-slate-300 rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                </span>
+                <div>
+                    <h5 class="text-xs font-bold text-slate-200">Konfigurasi PHP-FPM Pool per Akun UNIX</h5>
+                    <p class="text-[11px] text-slate-500">Atur alokasi resource terisolasi pool PHP-FPM untuk setiap user server FreeBSD.</p>
+                </div>
             </div>
-        </form>
+            <svg id="poolChevron" class="w-4 h-4 text-slate-400 transition transform rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+
+        <div id="poolAccordionContent" class="hidden border-t border-slate-800 p-5 bg-slate-950/40">
+            <form method="POST" action="/api/php/pool" class="space-y-4 text-xs max-w-2xl">
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">User Akun UNIX</label>
+                    <input type="text" name="user" required value="webuser1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Versi PHP</label>
+                        <select name="php_version" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                            <option value="php85">PHP 8.5</option>
+                            <option value="php84">PHP 8.4</option>
+                            <option value="php83" selected>PHP 8.3 (Default)</option>
+                            <option value="php82">PHP 8.2</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Memory Limit</label>
+                        <select name="memory_limit" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                            <option value="128M">128M (Standar)</option>
+                            <option value="256M" selected>256M (Direkomendasikan)</option>
+                            <option value="512M">512M (Tinggi)</option>
+                            <option value="1024M">1024M (Enterprise)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Upload Max Filesize</label>
+                        <select name="upload_max_filesize" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                            <option value="32M">32M</option>
+                            <option value="64M" selected>64M</option>
+                            <option value="128M">128M</option>
+                            <option value="256M">256M</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Max Execution Time (Detik)</label>
+                        <input type="number" name="max_execution_time" value="60" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                    </div>
+                </div>
+                <div class="pt-3 border-t border-slate-800 flex justify-end">
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
+                        Simpan & Reload Pool
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
 </div>
+
+<!-- MODAL 1: KONFIGURASI PHP.INI -->
+<div id="phpIniModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <!-- Header Modal -->
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+            <div class="flex items-center space-x-3">
+                <span class="p-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                </span>
+                <div>
+                    <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                        <span>Konfigurasi php.ini</span>
+                        <span id="iniModalVersionBadge" class="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">PHP 8.3</span>
+                    </h3>
+                    <p id="iniModalFilePath" class="text-[11px] text-slate-400 font-mono mt-0.5">/usr/local/etc/php.ini</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeIniModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Tab Bar -->
+        <div class="px-5 pt-3 border-b border-slate-800 bg-slate-950/30 flex space-x-3 text-xs">
+            <button type="button" id="tabQuickBtn" onclick="switchIniTab('quick')" class="pb-2.5 font-semibold text-indigo-400 border-b-2 border-indigo-500 transition">
+                Pengaturan Umum
+            </button>
+            <button type="button" id="tabRawBtn" onclick="switchIniTab('raw')" class="pb-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition">
+                Editor Langsung (Raw File)
+            </button>
+        </div>
+
+        <!-- Form Body -->
+        <form id="phpIniForm" onsubmit="submitIniForm(event)" class="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+            <input type="hidden" id="iniFormVersion" name="version" value="">
+            <input type="hidden" id="iniFormRawMode" name="raw_mode" value="false">
+
+            <!-- TAB 1: QUICK CONFIG -->
+            <div id="iniQuickContainer" class="space-y-4">
+                <div class="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 text-[11px] text-indigo-300 flex items-start space-x-2">
+                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>Pengaturan di bawah ini disimpan langsung ke dalam <code>php.ini</code> dan daemon PHP-FPM akan di-reload secara aman tanpa downtime.</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Memory Limit</label>
+                        <select id="iniMemoryLimit" name="memory_limit" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="128M">128M</option>
+                            <option value="256M">256M (Direkomendasikan)</option>
+                            <option value="512M">512M (Tinggi)</option>
+                            <option value="1024M">1024M (1 GB)</option>
+                            <option value="2048M">2048M (2 GB)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Max Execution Time (Detik)</label>
+                        <select id="iniMaxExecutionTime" name="max_execution_time" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="30">30 Detik</option>
+                            <option value="60">60 Detik (Standar)</option>
+                            <option value="120">120 Detik</option>
+                            <option value="300">300 Detik (5 Menit)</option>
+                            <option value="600">600 Detik (10 Menit)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Upload Max Filesize</label>
+                        <select id="iniUploadMaxFilesize" name="upload_max_filesize" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="16M">16M</option>
+                            <option value="32M">32M</option>
+                            <option value="64M">64M (Direkomendasikan)</option>
+                            <option value="128M">128M</option>
+                            <option value="256M">256M</option>
+                            <option value="512M">512M</option>
+                            <option value="1024M">1024M (1 GB)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Post Max Size</label>
+                        <select id="iniPostMaxSize" name="post_max_size" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="16M">16M</option>
+                            <option value="32M">32M</option>
+                            <option value="64M">64M</option>
+                            <option value="128M">128M (Direkomendasikan)</option>
+                            <option value="256M">256M</option>
+                            <option value="512M">512M</option>
+                            <option value="1024M">1024M (1 GB)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Max Input Time (Detik)</label>
+                        <input type="number" id="iniMaxInputTime" name="max_input_time" value="60" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Date Timezone</label>
+                        <select id="iniTimezone" name="timezone" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
+                            <option value="Asia/Pontianak">Asia/Pontianak (WIB)</option>
+                            <option value="Asia/Makassar">Asia/Makassar (WITA)</option>
+                            <option value="Asia/Jayapura">Asia/Jayapura (WIT)</option>
+                            <option value="UTC">UTC</option>
+                            <option value="America/New_York">America/New_York (EST)</option>
+                            <option value="Europe/London">Europe/London (GMT/BST)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Display Errors</label>
+                        <select id="iniDisplayErrors" name="display_errors" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="Off">Off (Direkomendasikan Produksi)</option>
+                            <option value="On">On (Debug / Development)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Error Reporting</label>
+                        <select id="iniErrorReporting" name="error_reporting" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED">Standar Aman Produksi</option>
+                            <option value="E_ALL">E_ALL (Semua Termasuk Notice)</option>
+                            <option value="0">Off (Tidak Ada Error)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Allow URL Fopen</label>
+                        <select id="iniAllowUrlFopen" name="allow_url_fopen" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="On">On (Diaktifkan)</option>
+                            <option value="Off">Off (Dinonaktifkan)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Short Open Tag (&lt;? ?&gt;)</label>
+                        <select id="iniShortOpenTag" name="short_open_tag" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="Off">Off (Standar)</option>
+                            <option value="On">On</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: RAW EDITOR -->
+            <div id="iniRawContainer" class="hidden space-y-3">
+                <p class="text-[11px] text-slate-400">Sunting seluruh isi berkas konfigurasi secara manual:</p>
+                <textarea id="iniRawContent" name="raw_content" rows="18" spellcheck="false"
+                    class="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-xl p-4 font-mono text-xs leading-relaxed focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></textarea>
+            </div>
+
+            <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+                <span id="iniStatusMsg" class="text-[11px] text-emerald-400 hidden font-semibold"></span>
+                <div class="flex items-center space-x-2 ml-auto">
+                    <button type="button" onclick="closeIniModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                    <button type="submit" id="saveIniBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>Simpan & Reload PHP-FPM</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL 2: MANAJEMEN EKSTENSI PHP -->
+<div id="phpExtModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <!-- Header Modal -->
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+            <div class="flex items-center space-x-3">
+                <span class="p-2 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-xl">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+                </span>
+                <div>
+                    <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                        <span>Ekstensi & Modul PHP</span>
+                        <span id="extModalVersionBadge" class="text-xs px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 font-mono">PHP 8.3</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Aktifkan atau nonaktifkan modul PHP. Perubahan otomatis mereload PHP-FPM.</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeExtModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Filter & Search Bar -->
+        <div class="p-4 border-b border-slate-800 bg-slate-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div class="relative w-full sm:w-72">
+                <input type="text" id="extSearchInput" oninput="filterExtensions()" placeholder="Cari ekstensi (misal: curl, mysql, gd)..."
+                    class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 text-xs">
+                <svg class="w-4 h-4 text-slate-500 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+            <div class="flex items-center space-x-2 text-slate-400">
+                <span class="text-slate-300 font-semibold" id="extActiveCounter">0 Aktif</span>
+                <span class="text-slate-600">|</span>
+                <span id="extTotalCounter">28 Modul</span>
+            </div>
+        </div>
+
+        <!-- Grid Ekstensi -->
+        <div class="flex-1 overflow-y-auto p-5">
+            <div id="extensionsLoading" class="py-12 text-center text-slate-400">
+                <svg class="w-8 h-8 mx-auto animate-spin text-teal-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <p class="text-xs">Memuat daftar ekstensi...</p>
+            </div>
+            <div id="extensionsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 hidden">
+                <!-- Diisi secara dinamis oleh JavaScript -->
+            </div>
+        </div>
+
+        <!-- Footer Modal -->
+        <div class="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs">
+            <span class="text-[11px] text-slate-500">FreeBSD Ports / pkg module repository</span>
+            <button type="button" onclick="closeExtModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition font-medium">Tutup</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 3: KONFIRMASI PASANG PHP (INSTALL) -->
+<div id="phpInstallModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Pasang PHP FreeBSD</h3>
+                <p id="installModalVersionSub" class="text-xs text-slate-400 font-mono">PHP 8.2 (php82)</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2 text-xs text-slate-300 mb-5">
+            <p class="leading-relaxed">Panel akan menjalankan perintah instalasi paket FreeBSD resmi:</p>
+            <div class="bg-slate-900 px-3 py-2 rounded-lg font-mono text-[11px] text-emerald-400 border border-slate-800 truncate" id="installCmdPreview">
+                pkg install -y php82 php82-curl php82-mysqli ...
+            </div>
+            <ul class="text-[11px] text-slate-400 space-y-1 list-disc list-inside pt-1">
+                <li>Instalasi binary runtime &amp; PHP-FPM daemon</li>
+                <li>Inisialisasi berkas konfigurasi php.ini</li>
+                <li>Modul esensial (cURL, PDO, MySQLi, Zip, GD, Intl, dll)</li>
+                <li>Autostart di <code>/etc/rc.conf</code></li>
+            </ul>
+        </div>
+
+        <form id="installPHPForm" onsubmit="submitInstallForm(event)" class="flex justify-end space-x-2">
+            <input type="hidden" id="installFormVersion" name="version" value="">
+            <button type="button" onclick="closeInstallModal()" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+            <button type="submit" id="btnSubmitInstall" class="px-5 py-2 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Mulai Pasang</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL 4: KONFIRMASI HAPUS PHP (UNINSTALL) -->
+<div id="phpUninstallModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Hapus PHP FreeBSD</h3>
+                <p id="uninstallModalVersionSub" class="text-xs text-rose-400 font-mono">PHP 8.2</p>
+            </div>
+        </div>
+
+        <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 text-xs text-rose-300 mb-5 leading-relaxed">
+            <p class="font-semibold text-rose-200 mb-1">⚠️ Perhatian Sebelum Menghapus:</p>
+            Layanan daemon PHP-FPM versi ini akan dihentikan dan paket FreeBSD akan dihapus via <code>pkg delete</code>. Pastikan tidak ada Virtual Host aktif yang masih mengarah ke versi ini.
+        </div>
+
+        <form id="uninstallPHPForm" onsubmit="submitUninstallForm(event)" class="flex justify-end space-x-2">
+            <input type="hidden" id="uninstallFormVersion" name="version" value="">
+            <button type="button" onclick="closeUninstallModal()" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+            <button type="submit" id="btnSubmitUninstall" class="px-5 py-2 text-xs bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>Hapus PHP</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- OVERLAY LOADING SAAT OPERASI PKG -->
+<div id="pkgLoadingOverlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl">
+        <svg class="w-10 h-10 mx-auto animate-spin text-emerald-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        <h4 id="loadingOverlayTitle" class="text-sm font-bold text-white">Memproses Paket FreeBSD...</h4>
+        <p id="loadingOverlayDesc" class="text-xs text-slate-400 mt-1">Mohon tunggu, pkg sedang mengunduh &amp; memasang modul.</p>
+    </div>
+</div>
+
+<!-- JAVASCRIPT LOGIC INTERAKTIF -->
+<script>
+let currentExtVersion = '';
+let allExtensionsData = [];
+
+// Accordion Pool Toggle
+function togglePoolAccordion() {
+    const content = document.getElementById('poolAccordionContent');
+    const chevron = document.getElementById('poolChevron');
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        chevron.classList.add('rotate-180');
+    } else {
+        content.classList.add('hidden');
+        chevron.classList.remove('rotate-180');
+    }
+}
+
+// ----------------- MODAL KONFIGURASI PHP.INI -----------------
+function openIniModal(verKey, verNum) {
+    document.getElementById('iniFormVersion').value = verKey;
+    document.getElementById('iniModalVersionBadge').textContent = 'PHP ' + verNum;
+    document.getElementById('iniStatusMsg').classList.add('hidden');
+    switchIniTab('quick');
+
+    // Fetch data konfigurasi dari API
+    fetch('/api/php/ini?version=' + encodeURIComponent(verKey))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.settings) {
+                const s = data.settings;
+                document.getElementById('iniModalFilePath').textContent = s.ini_path || '/usr/local/etc/php.ini';
+                if (s.memory_limit) document.getElementById('iniMemoryLimit').value = s.memory_limit;
+                if (s.max_execution_time) document.getElementById('iniMaxExecutionTime').value = s.max_execution_time;
+                if (s.upload_max_filesize) document.getElementById('iniUploadMaxFilesize').value = s.upload_max_filesize;
+                if (s.post_max_size) document.getElementById('iniPostMaxSize').value = s.post_max_size;
+                if (s.max_input_time) document.getElementById('iniMaxInputTime').value = s.max_input_time;
+                if (s.timezone) document.getElementById('iniTimezone').value = s.timezone;
+                if (s.display_errors) document.getElementById('iniDisplayErrors').value = s.display_errors;
+                if (s.error_reporting) document.getElementById('iniErrorReporting').value = s.error_reporting;
+                if (s.allow_url_fopen) document.getElementById('iniAllowUrlFopen').value = s.allow_url_fopen;
+                if (s.short_open_tag) document.getElementById('iniShortOpenTag').value = s.short_open_tag;
+            }
+            if (data.raw) {
+                document.getElementById('iniRawContent').value = data.raw;
+            }
+        })
+        .catch(err => {
+            console.error('Gagal mengambil konfigurasi:', err);
+        });
+
+    document.getElementById('phpIniModal').classList.remove('hidden');
+}
+
+function closeIniModal() {
+    document.getElementById('phpIniModal').classList.add('hidden');
+}
+
+function switchIniTab(tab) {
+    const quickContainer = document.getElementById('iniQuickContainer');
+    const rawContainer = document.getElementById('iniRawContainer');
+    const tabQuickBtn = document.getElementById('tabQuickBtn');
+    const tabRawBtn = document.getElementById('tabRawBtn');
+    const rawModeInput = document.getElementById('iniFormRawMode');
+
+    if (tab === 'quick') {
+        quickContainer.classList.remove('hidden');
+        rawContainer.classList.add('hidden');
+        tabQuickBtn.className = 'pb-2.5 font-semibold text-indigo-400 border-b-2 border-indigo-500 transition';
+        tabRawBtn.className = 'pb-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition';
+        rawModeInput.value = 'false';
+    } else {
+        quickContainer.classList.add('hidden');
+        rawContainer.classList.remove('hidden');
+        tabRawBtn.className = 'pb-2.5 font-semibold text-indigo-400 border-b-2 border-indigo-500 transition';
+        tabQuickBtn.className = 'pb-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition';
+        rawModeInput.value = 'true';
+    }
+}
+
+function submitIniForm(e) {
+    e.preventDefault();
+    const saveBtn = document.getElementById('saveIniBtn');
+    const statusMsg = document.getElementById('iniStatusMsg');
+    const origText = saveBtn.innerHTML;
+
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<svg class="w-4 h-4 animate-spin mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Menyimpan...';
+
+    const formData = new FormData(document.getElementById('phpIniForm'));
+
+    fetch('/api/php/ini', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = origText;
+        if (data.success) {
+            statusMsg.textContent = '✓ Tersimpan & PHP-FPM direload!';
+            statusMsg.className = 'text-[11px] text-emerald-400 font-semibold';
+            statusMsg.classList.remove('hidden');
+            setTimeout(() => {
+                closeIniModal();
+            }, 1000);
+        } else {
+            statusMsg.textContent = '✗ ' + (data.error || 'Gagal menyimpan');
+            statusMsg.className = 'text-[11px] text-rose-400 font-semibold';
+            statusMsg.classList.remove('hidden');
+        }
+    })
+    .catch(err => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = origText;
+        statusMsg.textContent = '✗ Terjadi kesalahan koneksi';
+        statusMsg.className = 'text-[11px] text-rose-400 font-semibold';
+        statusMsg.classList.remove('hidden');
+    });
+}
+
+// ----------------- MODAL EKSTENSI PHP -----------------
+function openExtModal(verKey, verNum) {
+    currentExtVersion = verKey;
+    document.getElementById('extModalVersionBadge').textContent = 'PHP ' + verNum;
+    document.getElementById('extSearchInput').value = '';
+    document.getElementById('extensionsLoading').classList.remove('hidden');
+    document.getElementById('extensionsGrid').classList.add('hidden');
+    document.getElementById('phpExtModal').classList.remove('hidden');
+
+    loadExtensions(verKey);
+}
+
+function closeExtModal() {
+    document.getElementById('phpExtModal').classList.add('hidden');
+}
+
+function loadExtensions(verKey) {
+    fetch('/api/php/extensions?version=' + encodeURIComponent(verKey))
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('extensionsLoading').classList.add('hidden');
+            document.getElementById('extensionsGrid').classList.remove('hidden');
+
+            if (data.success && data.extensions) {
+                allExtensionsData = data.extensions;
+                renderExtensions(allExtensionsData);
+                updateExtensionCounters(data.active_count, data.total_count);
+            }
+        })
+        .catch(err => {
+            document.getElementById('extensionsLoading').innerHTML = '<p class="text-rose-400 text-xs">Gagal memuat ekstensi.</p>';
+        });
+}
+
+function updateExtensionCounters(active, total) {
+    document.getElementById('extActiveCounter').textContent = active + ' Aktif';
+    document.getElementById('extTotalCounter').textContent = (total || allExtensionsData.length) + ' Modul';
+}
+
+function renderExtensions(list) {
+    const grid = document.getElementById('extensionsGrid');
+    grid.innerHTML = '';
+
+    if (list.length === 0) {
+        grid.innerHTML = '<div class="col-span-2 py-8 text-center text-slate-500 text-xs">Tidak ada ekstensi yang sesuai.</div>';
+        return;
+    }
+
+    list.forEach(ext => {
+        const card = document.createElement('div');
+        card.className = 'bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3.5 flex items-center justify-between gap-3 transition';
+
+        let badge = '';
+        let btn = '';
+
+        if (ext.status === 'active') {
+            badge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse"></span>Aktif</span>';
+            btn = `<button type="button" onclick="toggleExtAction('${ext.name}', 'disable')" class="px-2.5 py-1 text-[11px] font-semibold bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-lg transition">Nonaktifkan</button>`;
+        } else if (ext.status === 'disabled') {
+            badge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">Nonaktif</span>';
+            btn = `<button type="button" onclick="toggleExtAction('${ext.name}', 'enable')" class="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-sm">Aktifkan</button>`;
+        } else {
+            badge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-500">Belum Terpasang</span>';
+            btn = `<button type="button" onclick="toggleExtAction('${ext.name}', 'enable')" class="px-2.5 py-1 text-[11px] font-semibold bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 rounded-lg transition">+ Pasang</button>`;
+        }
+
+        card.innerHTML = `
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center space-x-2">
+                    <span class="font-bold text-white text-xs font-mono">${ext.name}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 bg-slate-800 text-slate-400 rounded">${ext.category}</span>
+                    ${badge}
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5 line-clamp-1">${ext.description}</p>
+            </div>
+            <div class="flex-shrink-0">
+                ${btn}
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function filterExtensions() {
+    const q = document.getElementById('extSearchInput').value.toLowerCase().trim();
+    if (!q) {
+        renderExtensions(allExtensionsData);
+        return;
+    }
+    const filtered = allExtensionsData.filter(e =>
+        e.name.toLowerCase().includes(q) ||
+        (e.description && e.description.toLowerCase().includes(q)) ||
+        (e.category && e.category.toLowerCase().includes(q))
+    );
+    renderExtensions(filtered);
+}
+
+function toggleExtAction(extName, action) {
+    showOverlay('Memperbarui Modul Ekstensi...', 'Mengubah konfigurasi ' + extName + ' & mereload PHP-FPM...');
+
+    const body = new URLSearchParams();
+    body.append('version', currentExtVersion);
+    body.append('ext', extName);
+    body.append('action', action);
+
+    fetch('/api/php/extensions/toggle', {
+        method: 'POST',
+        body: body,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        hideOverlay();
+        if (data.success && data.extensions) {
+            allExtensionsData = data.extensions;
+            filterExtensions();
+            updateExtensionCounters(data.active_count, data.extensions.length);
+        } else {
+            alert('Gagal mengubah ekstensi: ' + (data.error || 'Terjadi kesalahan'));
+        }
+    })
+    .catch(err => {
+        hideOverlay();
+        alert('Terjadi kesalahan jaringan.');
+    });
+}
+
+// ----------------- MODAL INSTALL PHP -----------------
+function openInstallModal(verKey, verNum) {
+    document.getElementById('installFormVersion').value = verKey;
+    document.getElementById('installModalVersionSub').textContent = `PHP ${verNum} (${verKey})`;
+    document.getElementById('installCmdPreview').textContent = `pkg install -y ${verKey} ${verKey}-curl ${verKey}-mysqli ...`;
+    document.getElementById('phpInstallModal').classList.remove('hidden');
+}
+
+function closeInstallModal() {
+    document.getElementById('phpInstallModal').classList.add('hidden');
+}
+
+function submitInstallForm(e) {
+    e.preventDefault();
+    const ver = document.getElementById('installFormVersion').value;
+    closeInstallModal();
+    showOverlay('Memasang PHP ' + ver + '...', 'FreeBSD pkg sedang mengunduh dan memasang paket. Ini membutuhkan waktu sekitar 15-30 detik.');
+
+    const body = new URLSearchParams();
+    body.append('version', ver);
+
+    fetch('/api/php/install', {
+        method: 'POST',
+        body: body,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        hideOverlay();
+        if (data.success) {
+            window.location.href = '/php?msg=' + encodeURIComponent(data.message || 'Instalasi PHP berhasil!');
+        } else {
+            alert('Gagal memasang PHP: ' + (data.error || 'Terjadi kesalahan sistem'));
+        }
+    })
+    .catch(err => {
+        hideOverlay();
+        alert('Terjadi kesalahan saat memproses instalasi.');
+    });
+}
+
+// ----------------- MODAL UNINSTALL PHP -----------------
+function openUninstallModal(verKey, verNum) {
+    document.getElementById('uninstallFormVersion').value = verKey;
+    document.getElementById('uninstallModalVersionSub').textContent = `PHP ${verNum} (${verKey})`;
+    document.getElementById('phpUninstallModal').classList.remove('hidden');
+}
+
+function closeUninstallModal() {
+    document.getElementById('phpUninstallModal').classList.add('hidden');
+}
+
+function submitUninstallForm(e) {
+    e.preventDefault();
+    const ver = document.getElementById('uninstallFormVersion').value;
+    closeUninstallModal();
+    showOverlay('Menghapus PHP ' + ver + '...', 'Sedang menghentikan daemon dan menghapus paket FreeBSD...');
+
+    const body = new URLSearchParams();
+    body.append('version', ver);
+
+    fetch('/api/php/uninstall', {
+        method: 'POST',
+        body: body,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        hideOverlay();
+        if (data.success) {
+            window.location.href = '/php?msg=' + encodeURIComponent(data.message || 'Paket PHP berhasil dihapus.');
+        } else {
+            alert('Gagal menghapus PHP: ' + (data.error || 'Terjadi kesalahan sistem'));
+        }
+    })
+    .catch(err => {
+        hideOverlay();
+        alert('Terjadi kesalahan saat menghapus PHP.');
+    });
+}
+
+// Loading Overlay Helper
+function showOverlay(title, desc) {
+    const o = document.getElementById('pkgLoadingOverlay');
+    document.getElementById('loadingOverlayTitle').textContent = title;
+    document.getElementById('loadingOverlayDesc').textContent = desc;
+    o.classList.remove('hidden');
+}
+
+function hideOverlay() {
+    document.getElementById('pkgLoadingOverlay').classList.add('hidden');
+}
+</script>
 {{end}}

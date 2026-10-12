@@ -29,6 +29,7 @@ type PageData struct {
 	Services     []system.ServiceStatus
 	VHosts       []webserver.VHostConfig
 	Databases    []database.DatabaseItem
+	PHPVersions  []php.PHPVersionInfo
 	Files        []FileInfo
 	CurrentPath  string
 	ParentPath   string
@@ -604,9 +605,12 @@ func (s *Server) handleServicesPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePHPPage(w http.ResponseWriter, r *http.Request) {
 	data := PageData{
-		Title:      "PHP Configuration",
-		ActiveMenu: "php",
-		Username:   s.getUsername(r),
+		Title:        "PHP Management",
+		ActiveMenu:   "php",
+		Username:     s.getUsername(r),
+		PHPVersions:  s.phpMgr.GetAvailableVersions(),
+		FlashSuccess: r.URL.Query().Get("msg"),
+		FlashError:   r.URL.Query().Get("err"),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1016,6 +1020,214 @@ func (s *Server) handleAPIPHPPool(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/php", http.StatusSeeOther)
+}
+
+func (s *Server) respondJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+func (s *Server) handleAPIPHPVersions(w http.ResponseWriter, r *http.Request) {
+	versions := s.phpMgr.GetAvailableVersions()
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"versions": versions,
+	})
+}
+
+func (s *Server) handleAPIPHPInstall(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Form tidak valid"})
+		return
+	}
+	ver := strings.TrimSpace(r.FormValue("version"))
+	if ver == "" {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Versi PHP wajib ditentukan"})
+		return
+	}
+
+	out, err := s.phpMgr.InstallVersion(ver)
+	if err != nil {
+		if strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+			s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error(), "output": out})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/php?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("PHP %s dan modul ekstensi berhasil dipasang di FreeBSD", ver)
+	if strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "message": msg, "output": out})
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/php?msg=%s", url.QueryEscape(msg)), http.StatusSeeOther)
+}
+
+func (s *Server) handleAPIPHPUninstall(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Form tidak valid"})
+		return
+	}
+	ver := strings.TrimSpace(r.FormValue("version"))
+	if ver == "" {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Versi PHP wajib ditentukan"})
+		return
+	}
+
+	out, err := s.phpMgr.UninstallVersion(ver)
+	if err != nil {
+		if strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+			s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error(), "output": out})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/php?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Paket PHP %s berhasil dihapus dari sistem", ver)
+	if strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "message": msg, "output": out})
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/php?msg=%s", url.QueryEscape(msg)), http.StatusSeeOther)
+}
+
+func (s *Server) handleAPIPHPIniGet(w http.ResponseWriter, r *http.Request) {
+	ver := r.URL.Query().Get("version")
+	if ver == "" {
+		ver = "php83"
+	}
+
+	settings, err := s.phpMgr.GetIniSettings(ver)
+	if err != nil {
+		s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+	raw, _ := s.phpMgr.GetRawIni(ver)
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"version":  ver,
+		"settings": settings,
+		"raw":      raw,
+	})
+}
+
+func (s *Server) handleAPIPHPIniSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Form tidak valid"})
+		return
+	}
+
+	ver := strings.TrimSpace(r.FormValue("version"))
+	if ver == "" {
+		ver = "php83"
+	}
+
+	rawMode := r.FormValue("raw_mode") == "true"
+	if rawMode {
+		rawContent := r.FormValue("raw_content")
+		if err := s.phpMgr.SaveRawIni(ver, rawContent); err != nil {
+			s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+	} else {
+		settings := &php.PHPINISettings{
+			Key:               ver,
+			MemoryLimit:       r.FormValue("memory_limit"),
+			MaxExecutionTime:  r.FormValue("max_execution_time"),
+			UploadMaxFilesize: r.FormValue("upload_max_filesize"),
+			PostMaxSize:       r.FormValue("post_max_size"),
+			MaxInputTime:      r.FormValue("max_input_time"),
+			Timezone:          r.FormValue("timezone"),
+			DisplayErrors:     r.FormValue("display_errors"),
+			ErrorReporting:    r.FormValue("error_reporting"),
+			AllowUrlFopen:     r.FormValue("allow_url_fopen"),
+			ShortOpenTag:      r.FormValue("short_open_tag"),
+		}
+		if err := s.phpMgr.SaveIniSettings(ver, settings); err != nil {
+			s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Konfigurasi php.ini (%s) berhasil disimpan & PHP-FPM direload", ver),
+	})
+}
+
+func (s *Server) handleAPIPHPExtensionsGet(w http.ResponseWriter, r *http.Request) {
+	ver := r.URL.Query().Get("version")
+	if ver == "" {
+		ver = "php83"
+	}
+
+	exts, err := s.phpMgr.GetExtensions(ver)
+	if err != nil {
+		s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+
+	activeCount := 0
+	for _, ext := range exts {
+		if ext.Status == "active" {
+			activeCount++
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"version":      ver,
+		"active_count": activeCount,
+		"total_count":  len(exts),
+		"extensions":   exts,
+	})
+}
+
+func (s *Server) handleAPIPHPExtensionsToggle(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Form tidak valid"})
+		return
+	}
+
+	ver := strings.TrimSpace(r.FormValue("version"))
+	ext := strings.TrimSpace(r.FormValue("ext"))
+	action := strings.TrimSpace(r.FormValue("action"))
+
+	if ver == "" || ext == "" || action == "" {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Parameter tidak lengkap"})
+		return
+	}
+
+	if err := s.phpMgr.ToggleExtension(ver, ext, action); err != nil {
+		s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+
+	exts, _ := s.phpMgr.GetExtensions(ver)
+	activeCount := 0
+	for _, e := range exts {
+		if e.Status == "active" {
+			activeCount++
+		}
+	}
+
+	actionText := "diaktifkan"
+	if action == "disable" || action == "nonaktifkan" {
+		actionText = "dinonaktifkan"
+	} else if action == "install" || action == "pasang" {
+		actionText = "dipasang dan diaktifkan"
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"message":      fmt.Sprintf("Ekstensi %s berhasil %s", ext, actionText),
+		"active_count": activeCount,
+		"extensions":   exts,
+	})
 }
 
 // Database Management Handlers
