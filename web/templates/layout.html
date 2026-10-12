@@ -5,11 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}} - BSDPanel FreeBSD Control Panel</title>
-    <!-- Google Fonts: Fira Sans -->
+    <!-- Google Fonts: Fira Sans & Fira Code -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS CDN (dapat diganti build lokal via Makefile) -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -19,19 +19,6 @@
                     fontFamily: {
                         sans: ['"Fira Sans"', 'sans-serif'],
                         mono: ['"Fira Code"', 'monospace'],
-                    },
-                    colors: {
-                        bsd: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            500: '#10b981',
-                            600: '#059669',
-                            800: '#064e3b',
-                            900: '#022c22',
-                            dark: '#0f172a',
-                            panel: '#1e293b',
-                            card: '#334155',
-                        }
                     }
                 }
             }
@@ -46,7 +33,6 @@
         code, pre {
             font-family: 'Fira Code', monospace;
         }
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -65,19 +51,22 @@
 </head>
 <body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-emerald-500 selection:text-white">
 
-    <!-- Mobile Header -->
-    <header class="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between">
+    <!-- Mobile Top Navigation Bar -->
+    <header class="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-40">
         <div class="flex items-center space-x-3">
             <span class="text-2xl">😈</span>
             <span class="font-bold text-lg tracking-wider text-emerald-400">BSD<span class="text-white">Panel</span></span>
         </div>
-        <button id="mobileMenuBtn" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white focus:outline-none">
+        <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none transition">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </button>
     </header>
 
+    <!-- Mobile Backdrop Overlay -->
+    <div id="mobileBackdrop" class="fixed inset-0 bg-black/60 z-40 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
+
     <!-- Sidebar Navigation -->
-    <aside id="sidebar" class="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 min-h-screen">
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 min-h-screen">
         <!-- Logo Brand -->
         <div class="p-5 border-b border-slate-800 flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -87,7 +76,13 @@
                     <p class="text-xs text-slate-400 font-mono">FreeBSD Native</p>
                 </div>
             </div>
-            <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">v1.0.0</span>
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">v1.0.0</span>
+                <!-- Mobile close button -->
+                <button id="mobileCloseBtn" class="md:hidden text-slate-400 hover:text-white p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
         </div>
 
         <!-- Menu Links -->
@@ -103,6 +98,11 @@
                 <span>Virtual Hosts</span>
             </a>
 
+            <a href="/files" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "files"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                <span>File Manager</span>
+            </a>
+
             <a href="/services" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "services"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
                 <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 <span>FreeBSD Services</span>
@@ -111,6 +111,11 @@
             <a href="/php" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "php"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
                 <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                 <span>PHP Management</span>
+            </a>
+
+            <a href="/users" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "users"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span>Users / Akun</span>
             </a>
 
             <div class="pt-4 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">System & Tools</div>
@@ -127,12 +132,12 @@
         <!-- User Footer & Logout -->
         <div class="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30">
-                    AD
+                <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30 uppercase">
+                    {{if .Username}}{{slice .Username 0 2}}{{else}}PG{{end}}
                 </div>
                 <div class="overflow-hidden">
-                    <p class="text-xs font-semibold text-slate-200 truncate">admin</p>
-                    <p class="text-[10px] text-emerald-400 font-mono">root / wheel</p>
+                    <p class="text-xs font-semibold text-slate-200 truncate">{{if .Username}}{{.Username}}{{else}}pengelola{{end}}</p>
+                    <p class="text-[10px] text-emerald-400 font-mono">administrator</p>
                 </div>
             </div>
             <a href="/logout" title="Keluar" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition">
@@ -160,11 +165,38 @@
         </header>
 
         <!-- Dynamic Body Content -->
-        <main class="flex-1 overflow-y-auto p-6 bg-[#0b1120]">
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#0b1120]">
             {{template "content" .}}
         </main>
     </div>
 
+    <!-- Script to toggle mobile sidebar -->
+    <script>
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileCloseBtn = document.getElementById('mobileCloseBtn');
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('mobileBackdrop');
+
+        function toggleSidebar(open) {
+            if (open) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', () => toggleSidebar(true));
+        }
+        if (mobileCloseBtn) {
+            mobileCloseBtn.addEventListener('click', () => toggleSidebar(false));
+        }
+        if (backdrop) {
+            backdrop.addEventListener('click', () => toggleSidebar(false));
+        }
+    </script>
 </body>
 </html>
 {{end}}

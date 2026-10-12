@@ -1,0 +1,54 @@
+{{define "content"}}
+<div class="space-y-6 max-w-2xl">
+
+    <div>
+        <h3 class="text-base font-bold text-white">Manajemen Pengguna (User Admin)</h3>
+        <p class="text-xs text-slate-400 mt-1">Ubah username dan password login panel administrator.</p>
+    </div>
+
+    {{if .FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 flex items-center space-x-3 text-xs text-emerald-400">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span>{{.FlashSuccess}}</span>
+    </div>
+    {{end}}
+
+    {{if .FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 flex items-center space-x-3 text-xs text-rose-400">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>{{.FlashError}}</span>
+    </div>
+    {{end}}
+
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-sm space-y-5">
+        <form method="POST" action="/api/users/update" class="space-y-4 text-xs">
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Username Baru</label>
+                <input type="text" name="username" required value="{{.Username}}"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Password Baru</label>
+                <input type="password" name="new_password" placeholder="Kosongkan jika tidak ingin mengubah password"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Konfirmasi Password Baru</label>
+                <input type="password" name="confirm_password" placeholder="Ulangi password baru"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end">
+                <button type="submit"
+                    class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm flex items-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span>Simpan Perubahan</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{{end}}

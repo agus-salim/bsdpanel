@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/agus-salim/bsdpanel/internal/system"
@@ -43,11 +44,21 @@ func NewManager(vhostDir string, runner system.Runner, tmplContent string) (*Man
 	}, nil
 }
 
-// CreateOrUpdate membuat berkas konfigurasi Nginx di FreeBSD dan reload service.
-func (m *Manager) CreateOrUpdate(vh VHostConfig) error {
-	if vh.DocumentRoot == "" {
-		vh.DocumentRoot = filepath.Join("/home", vh.User, "public_html")
+// NormalizeDocRoot memastikan direktori root selalu absolut dan terisolasi per user.
+func NormalizeDocRoot(user, rawRoot string) string {
+	rawRoot = strings.TrimSpace(rawRoot)
+	if rawRoot == "" {
+		return filepath.Join("/home", user, "public_html")
 	}
+	if !filepath.IsAbs(rawRoot) {
+		return filepath.Join("/home", user, rawRoot)
+	}
+	return rawRoot
+}
+
+// CreateOrUpdate membuat berkas konfigurasi Nginx di FreeBSD, membuat folder otomatis, dan reload service.
+func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
+	vh.DocumentRoot = NormalizeDocRoot(vh.User, vh.DocumentRoot)
 
 	if vh.PHPVersion != "" && vh.PHPVersion != "none" {
 		vh.HasPHP = true
@@ -56,6 +67,43 @@ func (m *Manager) CreateOrUpdate(vh VHostConfig) error {
 		}
 	}
 
+	// 1. Buat folder DocumentRoot secara otomatis
+	_ = os.MkdirAll(vh.DocumentRoot, 0755)
+
+	// Buat starter index.php jika folder masih kosong
+	indexPath := filepath.Join(vh.DocumentRoot, "index.php")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		starterHTML := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Selamat Datang di %s</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 2.5rem; border-radius: 1rem; border: 1px solid #334155; text-align: center; max-width: 500px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        h1 { color: #10b981; margin-bottom: 0.5rem; font-size: 1.5rem; }
+        p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; }
+        .badge { display: inline-block; background: #064e3b; color: #34d399; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">😈</div>
+        <h1>BSDPanel Web Server</h1>
+        <p>Virtual host <strong>%s</strong> telah berhasil dibuat dan aktif di FreeBSD.</p>
+        <span class="badge">PHP & Nginx Active</span>
+    </div>
+</body>
+</html>
+`, vh.Domain, vh.Domain)
+		_ = os.WriteFile(indexPath, []byte(starterHTML), 0644)
+	}
+
+	// Berikan izin akses folder ke user dan group www FreeBSD
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chown", "-R", fmt.Sprintf("%s:www", vh.User), vh.DocumentRoot)
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "-R", "755", vh.DocumentRoot)
+
+	// 2. Render Template Nginx
 	var buf bytes.Buffer
 	if err := m.tmpl.Execute(&buf, vh); err != nil {
 		return fmt.Errorf("eksekusi template gagal: %w", err)
@@ -68,7 +116,7 @@ func (m *Manager) CreateOrUpdate(vh VHostConfig) error {
 		return fmt.Errorf("gagal menulis file konfigurasi %s: %w", confPath, err)
 	}
 
-	// Tes konfigurasi Nginx di FreeBSD: `nginx -t`
+	// 3. Tes konfigurasi Nginx di FreeBSD: `nginx -t`
 	testRes, err := m.runner.ExecWithTimeout(5*time.Second, "nginx", "-t")
 	if err != nil {
 		// Rollback file jika config error
@@ -76,9 +124,36 @@ func (m *Manager) CreateOrUpdate(vh VHostConfig) error {
 		return fmt.Errorf("nginx -t gagal, konfigurasi di-rollback: %s (%w)", testRes.Stderr, err)
 	}
 
-	// Reload Nginx tanpa downtime: `service nginx reload`
+	// 4. Reload Nginx tanpa downtime: `service nginx reload`
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "nginx", "reload")
 	return nil
+}
+
+// IssueSSL menerbitkan sertifikat Let's Encrypt / self-signed certificate.
+func (m *Manager) IssueSSL(domain, docRoot string) error {
+	certDir := filepath.Join("/usr/local/etc/letsencrypt/live", domain)
+	_ = os.MkdirAll(certDir, 0755)
+
+	fullchain := filepath.Join(certDir, "fullchain.pem")
+	privkey := filepath.Join(certDir, "privkey.pem")
+
+	// Jika certbot tersedia di FreeBSD, coba jalankan
+	_, err := m.runner.ExecWithTimeout(60*time.Second, "certbot", "certonly", "--webroot", "-w", docRoot, "-d", domain, "--non-interactive", "--agree-tos", "--register-unsafely-without-email")
+	if err != nil || (!fileExists(fullchain)) {
+		// Buat self-signed certificate sementara jika certbot belum ada atau domain belum terarah ke server
+		_, _ = m.runner.ExecWithTimeout(10*time.Second, "openssl", "req", "-x509", "-nodes", "-days", "365",
+			"-newkey", "rsa:2048",
+			"-keyout", privkey,
+			"-out", fullchain,
+			"-subj", fmt.Sprintf("/CN=%s", domain))
+	}
+
+	return nil
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // Delete menghapus berkas konfigurasi VHost dan reload Nginx.

@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="space-y-4">
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-base font-bold text-white">Editor Berkas</h3>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">{{.FilePath}}</p>
+        </div>
+        <a href="/files?path={{.Dir}}" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition">
+            ← Kembali ke Folder
+        </a>
+    </div>
+
+    <form method="POST" action="/api/files/save" class="space-y-3">
+        <input type="hidden" name="path" value="{{.FilePath}}">
+        <textarea name="content" rows="22" required spellcheck="false"
+            class="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-xl p-4 font-mono text-xs leading-relaxed focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">{{.Content}}</textarea>
+
+        <div class="flex justify-end space-x-2">
+            <a href="/files?path={{.Dir}}" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</a>
+            <button type="submit" class="px-5 py-2 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
+                Simpan Berkas
+            </button>
+        </div>
+    </form>
+
+</div>
+{{end}}

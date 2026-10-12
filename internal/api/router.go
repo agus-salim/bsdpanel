@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/agus-salim/bsdpanel/internal/auth"
@@ -14,6 +16,10 @@ import (
 	"github.com/agus-salim/bsdpanel/internal/webserver"
 	"github.com/agus-salim/bsdpanel/web"
 )
+
+type userContextKey string
+
+const userKey userContextKey = "user"
 
 type Server struct {
 	cfg        *config.Config
@@ -27,7 +33,6 @@ type Server struct {
 	phpMgr     *php.Manager
 	dbMgr      *database.Manager
 
-	// Simpan data vhost in-memory / local state
 	vhostsMu   sync.RWMutex
 	vhostsList []webserver.VHostConfig
 
@@ -74,7 +79,15 @@ func NewServer(
 }
 
 func (s *Server) initTemplates() error {
-	pages := []string{"dashboard.html", "vhosts.html", "services.html", "php.html"}
+	pages := []string{
+		"dashboard.html",
+		"vhosts.html",
+		"services.html",
+		"php.html",
+		"users.html",
+		"files.html",
+		"file_edit.html",
+	}
 
 	for _, page := range pages {
 		tmpl, err := template.ParseFS(web.Content, "templates/layout.html", "templates/"+page)
@@ -83,6 +96,14 @@ func (s *Server) initTemplates() error {
 		}
 		s.templates[page] = tmpl
 	}
+
+	// Template login mandiri tanpa layout
+	loginTmpl, err := template.ParseFS(web.Content, "templates/login.html")
+	if err != nil {
+		return err
+	}
+	s.templates["login.html"] = loginTmpl
+
 	return nil
 }
 
@@ -96,21 +117,33 @@ func (s *Server) SetupRouter() http.Handler {
 		mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	}
 
+	// Login & Logout
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.HandleFunc("POST /login", s.handleLoginSubmit)
+	mux.HandleFunc("GET /logout", s.handleLogout)
+
 	// Web UI Pages
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 	mux.HandleFunc("GET /vhosts", s.handleVHostsPage)
+	mux.HandleFunc("GET /files", s.handleFilesPage)
+	mux.HandleFunc("GET /files/edit", s.handleFileEditPage)
 	mux.HandleFunc("GET /services", s.handleServicesPage)
 	mux.HandleFunc("GET /php", s.handlePHPPage)
-	mux.HandleFunc("GET /logout", s.handleLogout)
+	mux.HandleFunc("GET /users", s.handleUsersPage)
 
 	// REST / Form Action APIs
 	mux.HandleFunc("GET /api/stats", s.handleAPIStats)
 	mux.HandleFunc("POST /api/vhosts/create", s.handleAPIVHostCreate)
 	mux.HandleFunc("POST /api/vhosts/delete", s.handleAPIVHostDelete)
+	mux.HandleFunc("POST /api/vhosts/ssl", s.handleVHostSSL)
 	mux.HandleFunc("POST /api/services/action", s.handleAPIServiceAction)
 	mux.HandleFunc("POST /api/php/pool", s.handleAPIPHPPool)
+	mux.HandleFunc("POST /api/users/update", s.handleUpdateUser)
+	mux.HandleFunc("POST /api/files/create", s.handleFileCreate)
+	mux.HandleFunc("POST /api/files/save", s.handleFileSave)
+	mux.HandleFunc("POST /api/files/delete", s.handleFileDelete)
 
-	return s.loggingMiddleware(mux)
+	return s.authMiddleware(s.loggingMiddleware(mux))
 }
 
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
@@ -119,5 +152,35 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Server", "bsdpanel/1.0 (FreeBSD)")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// authMiddleware memproteksi seluruh halaman agar wajib login kecuali rute publik.
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Rute publik yang diizinkan tanpa autentikasi
+		if path == "/login" || strings.HasPrefix(path, "/static/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		cookie, err := r.Cookie("bsdpanel_session")
+		if err != nil || cookie.Value == "" {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		payload, err := s.authMgr.VerifyToken(cookie.Value)
+		if err != nil {
+			s.authMgr.ClearAuthCookie(w)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		// Masukkan user ke request context
+		ctx := context.WithValue(r.Context(), userKey, payload.Username)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -4,51 +4,102 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h3 class="text-base font-bold text-white">Manajemen Virtual Host (VHost)</h3>
-            <p class="text-xs text-slate-400 mt-1">Isolasi domain per user UNIX FreeBSD dengan Nginx dan PHP-FPM socket pool</p>
+            <p class="text-xs text-slate-400 mt-1">Isolasi domain per user UNIX FreeBSD dengan Nginx, SSL Let's Encrypt, dan PHP-FPM socket pool</p>
         </div>
         <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-sm flex items-center space-x-2">
             <span>+ Tambah Virtual Host Baru</span>
         </button>
     </div>
 
+    {{if .FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-xs text-emerald-400">
+        {{.FlashSuccess}}
+    </div>
+    {{end}}
+    {{if .FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-xs text-rose-400">
+        {{.FlashError}}
+    </div>
+    {{end}}
+
     <!-- Daftar Domain -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-300">
-                <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800 text-[11px]">
                     <tr>
-                        <th class="p-4">Domain</th>
-                        <th class="p-4">User Sistem</th>
-                        <th class="p-4">Web Server</th>
-                        <th class="p-4">PHP Runtime</th>
-                        <th class="p-4">Document Root</th>
-                        <th class="p-4 text-right">Aksi</th>
+                        <th class="p-3.5">Domain</th>
+                        <th class="p-3.5">SSL</th>
+                        <th class="p-3.5">User Sistem</th>
+                        <th class="p-3.5">Web Server</th>
+                        <th class="p-3.5">PHP Runtime</th>
+                        <th class="p-3.5">Document Root</th>
+                        <th class="p-3.5 text-right">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800">
                     {{if .VHosts}}
                     {{range .VHosts}}
                     <tr class="hover:bg-slate-800/40 transition">
-                        <td class="p-4 font-semibold text-white flex items-center space-x-2">
-                            <span>🌐</span>
-                            <a href="http://{{.Domain}}" target="_blank" class="text-emerald-400 hover:underline">{{.Domain}}</a>
+                        <td class="p-3.5 font-semibold text-white">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-cyan-400">🌐</span>
+                                <a href="{{if .SSLEnabled}}https://{{else}}http://{{end}}{{.Domain}}" target="_blank" class="text-emerald-400 hover:underline">
+                                    {{.Domain}}
+                                </a>
+                            </div>
                         </td>
-                        <td class="p-4">
+                        <td class="p-3.5">
+                            {{if .SSLEnabled}}
+                            <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="SSL Let's Encrypt Aktif">
+                                <span>🔒</span>
+                                <span>SSL Aktif</span>
+                            </span>
+                            {{else}}
+                            <form method="POST" action="/api/vhosts/ssl" class="inline">
+                                <input type="hidden" name="domain" value="{{.Domain}}">
+                                <button type="submit" class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Pasang Let's Encrypt SSL">
+                                    <span>🛡️</span>
+                                    <span>Pasang SSL</span>
+                                </button>
+                            </form>
+                            {{end}}
+                        </td>
+                        <td class="p-3.5">
                             <span class="px-2 py-0.5 font-mono text-[11px] bg-slate-800 text-slate-300 rounded border border-slate-700">
                                 {{.User}}
                             </span>
                         </td>
-                        <td class="p-4 uppercase font-semibold text-cyan-400">{{.Webserver}}</td>
-                        <td class="p-4">
+                        <td class="p-3.5 uppercase font-semibold text-cyan-400">{{.Webserver}}</td>
+                        <td class="p-3.5">
                             <span class="px-2 py-0.5 rounded font-mono text-[11px] {{if eq .PHPVersion "none"}}bg-slate-800 text-slate-400{{else}}bg-indigo-500/10 text-indigo-400 border border-indigo-500/20{{end}}">
                                 {{.PHPVersion}}
                             </span>
                         </td>
-                        <td class="p-4 font-mono text-slate-400 text-[11px]">{{.DocumentRoot}}</td>
-                        <td class="p-4 text-right">
+                        <td class="p-3.5 font-mono text-slate-400 text-[11px]">{{.DocumentRoot}}</td>
+                        <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                            <!-- Icon File Manager -->
+                            <a href="/files?path={{.DocumentRoot}}" title="Buka File Manager"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-yellow-400 hover:text-yellow-300 rounded border border-slate-700 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                            </a>
+
+                            <!-- Icon SSL Toggle -->
+                            {{if not .SSLEnabled}}
+                            <form method="POST" action="/api/vhosts/ssl" class="inline">
+                                <input type="hidden" name="domain" value="{{.Domain}}">
+                                <button type="submit" title="Terbitkan SSL Let's Encrypt"
+                                    class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded border border-slate-700 transition shadow-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                </button>
+                            </form>
+                            {{end}}
+
+                            <!-- Hapus Domain -->
                             <form method="POST" action="/api/vhosts/delete" onsubmit="return confirm('Hapus konfigurasi domain {{.Domain}}?')" class="inline">
                                 <input type="hidden" name="domain" value="{{.Domain}}">
-                                <button type="submit" class="px-2.5 py-1 text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
+                                <button type="submit" title="Hapus Virtual Host"
+                                    class="inline-flex items-center justify-center px-2 py-1 text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
                                     Hapus
                                 </button>
                             </form>
@@ -57,7 +108,7 @@
                     {{end}}
                     {{else}}
                     <tr>
-                        <td colspan="6" class="p-8 text-center text-slate-500">
+                        <td colspan="7" class="p-8 text-center text-slate-500">
                             Belum ada virtual host yang terdaftar. Klik tombol di atas untuk membuat domain pertama.
                         </td>
                     </tr>
@@ -77,12 +128,12 @@
             <form method="POST" action="/api/vhosts/create" class="space-y-4 text-xs">
                 <div>
                     <label class="block text-slate-300 font-semibold mb-1">Nama Domain</label>
-                    <input type="text" name="domain" required placeholder="example.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
+                    <input type="text" name="domain" required placeholder="go.mtsn1sekadau.sch.id" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-slate-300 font-semibold mb-1">User Sistem FreeBSD (pw)</label>
-                        <input type="text" name="user" required placeholder="webuser1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
+                        <input type="text" name="user" required placeholder="webuser1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
                     </div>
                     <div>
                         <label class="block text-slate-300 font-semibold mb-1">Web Server</label>
@@ -104,13 +155,17 @@
                     </div>
                     <div>
                         <label class="block text-slate-300 font-semibold mb-1">Document Root</label>
-                        <input type="text" name="document_root" placeholder="Otomatis /home/{user}/public_html" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+                        <input type="text" name="document_root" placeholder="Kosongkan untuk /home/{user}/public_html" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
                     </div>
+                </div>
+
+                <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-400">
+                    <span class="text-emerald-400 font-semibold">ℹ️ Otomatisasi FreeBSD:</span> Folder situs akan otomatis dibuat di <code class="text-slate-300">/home/{user}/public_html</code> beserta file starter <code class="text-slate-300">index.php</code> dan permission <code class="text-slate-300">chmod 755</code>.
                 </div>
 
                 <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
                     <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg">Buat VHost & User</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-sm">Buat VHost & Direktori</button>
                 </div>
             </form>
         </div>

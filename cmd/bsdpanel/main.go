@@ -69,8 +69,26 @@ func main() {
 
 	// Template bawaan untuk Nginx VHost & PHP Pool
 	nginxTmpl := `# Nginx VHost Managed by bsdpanel
+{{if .SSLEnabled}}
 server {
     listen 80;
+    listen [::]:80;
+    server_name {{.Domain}};
+    return 301 https://$host$request_uri;
+}
+{{end}}
+
+server {
+    {{if .SSLEnabled}}
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    ssl_certificate     /usr/local/etc/letsencrypt/live/{{.Domain}}/fullchain.pem;
+    ssl_certificate_key /usr/local/etc/letsencrypt/live/{{.Domain}}/privkey.pem;
+    {{else}}
+    listen 80;
+    listen [::]:80;
+    {{end}}
+
     server_name {{.Domain}};
     root {{.DocumentRoot}};
     index index.php index.html;
