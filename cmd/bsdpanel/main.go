@@ -78,27 +78,22 @@ func main() {
 
 	// Template bawaan untuk Nginx VHost & PHP Pool
 	nginxTmpl := `# Nginx VHost Managed by bsdpanel
-{{if .SSLEnabled}}
 server {
     listen 80;
     listen [::]:80;
     server_name {{.Domain}};
-    return 301 https://$host$request_uri;
-}
-{{end}}
 
-server {
+    # Let's Encrypt ACME Challenge
+    location /.well-known/acme-challenge/ {
+        root {{.DocumentRoot}};
+        try_files $uri =404;
+    }
+
     {{if .SSLEnabled}}
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    ssl_certificate     /usr/local/etc/letsencrypt/live/{{.Domain}}/fullchain.pem;
-    ssl_certificate_key /usr/local/etc/letsencrypt/live/{{.Domain}}/privkey.pem;
+    location / {
+        return 301 https://$host$request_uri;
+    }
     {{else}}
-    listen 80;
-    listen [::]:80;
-    {{end}}
-
-    server_name {{.Domain}};
     root {{.DocumentRoot}};
     index index.php index.html;
     access_log /var/log/nginx/{{.Domain}}_access.log;
@@ -115,7 +110,38 @@ server {
         include fastcgi_params;
     }
     {{end}}
-}`
+    {{end}}
+}
+
+{{if .SSLEnabled}}
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{.Domain}};
+
+    ssl_certificate     {{.SSLCertPath}};
+    ssl_certificate_key {{.SSLKeyPath}};
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    root {{.DocumentRoot}};
+    index index.php index.html;
+    access_log /var/log/nginx/{{.Domain}}_ssl_access.log;
+    error_log /var/log/nginx/{{.Domain}}_ssl_error.log;
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+    {{if .HasPHP}}
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_pass unix:{{.PHPSocket}};
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+    {{end}}
+}
+{{end}}`
 
 	phpPoolTmpl := `[{{.User}}]
 user = {{.User}}

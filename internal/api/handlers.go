@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -427,14 +428,24 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 
 	for i := range s.vhostsList {
 		if s.vhostsList[i].Domain == domain {
-			_ = s.vhostMgr.IssueSSL(domain, s.vhostsList[i].DocumentRoot)
+			err := s.vhostMgr.IssueSSL(domain, s.vhostsList[i].DocumentRoot)
+			if err != nil {
+				s.vhostsList[i].SSLEnabled = false
+				_ = s.vhostMgr.CreateOrUpdate(&s.vhostsList[i])
+				http.Redirect(w, r, fmt.Sprintf("/vhosts?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
+				return
+			}
+
 			s.vhostsList[i].SSLEnabled = true
-			_ = s.vhostMgr.CreateOrUpdate(&s.vhostsList[i])
+			if err := s.vhostMgr.CreateOrUpdate(&s.vhostsList[i]); err != nil {
+				http.Redirect(w, r, fmt.Sprintf("/vhosts?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
+				return
+			}
 			break
 		}
 	}
 
-	http.Redirect(w, r, "/vhosts?msg=Sertifikat+SSL+Let%27s+Encrypt+berhasil+diterbitkan!", http.StatusSeeOther)
+	http.Redirect(w, r, "/vhosts?msg=Sertifikat+SSL+Let%27s+Encrypt+berhasil+diterbitkan+dan+aktif!", http.StatusSeeOther)
 }
 
 func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {

@@ -4,30 +4,23 @@
 # User:   {{.User}}
 # ==============================================================================
 
-{{if .SSLEnabled}}
 server {
     listen 80;
     listen [::]:80;
     server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
-    return 301 https://$host$request_uri;
-}
-{{end}}
 
-server {
+    # Lokasi Let's Encrypt ACME Challenge (Wajib selalu bisa diakses via HTTP port 80)
+    location /.well-known/acme-challenge/ {
+        root {{.DocumentRoot}};
+        try_files $uri =404;
+    }
+
     {{if .SSLEnabled}}
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    ssl_certificate     /usr/local/etc/letsencrypt/live/{{.Domain}}/fullchain.pem;
-    ssl_certificate_key /usr/local/etc/letsencrypt/live/{{.Domain}}/privkey.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
+    # Redirect seluruh lalu lintas HTTP ke HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
     {{else}}
-    listen 80;
-    listen [::]:80;
-    {{end}}
-
-    server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
-
     root {{.DocumentRoot}};
     index index.php index.html index.htm;
 
@@ -78,4 +71,71 @@ server {
         fastcgi_temp_file_write_size 256k;
     }
     {{end}}
+    {{end}}
 }
+
+{{if .SSLEnabled}}
+# Blok Server HTTPS (Port 443 SSL)
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
+
+    ssl_certificate     {{.SSLCertPath}};
+    ssl_certificate_key {{.SSLKeyPath}};
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    root {{.DocumentRoot}};
+    index index.php index.html index.htm;
+
+    # Logging di FreeBSD
+    access_log /var/log/nginx/{{.Domain}}_ssl_access.log;
+    error_log  /var/log/nginx/{{.Domain}}_ssl_error.log error;
+
+    # Security Headers
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Perlindungan file tersembunyi
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Static Assets Caching
+    location ~* \.(jpg|jpeg|gif|png|css|js|ico|webp|svg|woff|woff2|ttf)$ {
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # Main Router Fallback
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    {{if .HasPHP}}
+    # PHP-FPM Socket Terisolasi per User UNIX FreeBSD
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:{{.PHPSocket}};
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        
+        include fastcgi_params;
+        fastcgi_read_timeout 300;
+        fastcgi_buffer_size 128k;
+        fastcgi_buffers 256 16k;
+        fastcgi_busy_buffers_size 256k;
+        fastcgi_temp_file_write_size 256k;
+    }
+    {{end}}
+}
+{{end}}

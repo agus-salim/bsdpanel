@@ -23,6 +23,8 @@ type VHostConfig struct {
 	PHPSocket    string   `json:"php_socket"`
 	HasPHP       bool     `json:"has_php"`
 	SSLEnabled   bool     `json:"ssl_enabled"`
+	SSLCertPath  string   `json:"ssl_cert_path"`
+	SSLKeyPath   string   `json:"ssl_key_path"`
 	CreatedAt    string   `json:"created_at"`
 }
 
@@ -80,8 +82,10 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 		}
 	}
 
-	// 1. Buat folder DocumentRoot secara otomatis
+	// 1. Buat folder DocumentRoot & ACME challenge secara otomatis
 	_ = os.MkdirAll(vh.DocumentRoot, 0755)
+	acmeChallengeDir := filepath.Join(vh.DocumentRoot, ".well-known", "acme-challenge")
+	_ = os.MkdirAll(acmeChallengeDir, 0755)
 
 	// Buat starter index.php jika folder masih kosong
 	indexPath := filepath.Join(vh.DocumentRoot, "index.php")
@@ -116,6 +120,40 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chown", "-R", fmt.Sprintf("%s:www", vh.User), vh.DocumentRoot)
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "-R", "755", vh.DocumentRoot)
 
+	// Pastikan jalur sertifikat terpasang jika SSL aktif
+	if vh.SSLEnabled {
+		if vh.SSLCertPath == "" {
+			certPaths := []string{
+				fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s/fullchain.pem", vh.Domain),
+				fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", vh.Domain),
+			}
+			for _, cp := range certPaths {
+				if fileExists(cp) {
+					vh.SSLCertPath = cp
+					break
+				}
+			}
+			if vh.SSLCertPath == "" {
+				vh.SSLCertPath = certPaths[0]
+			}
+		}
+		if vh.SSLKeyPath == "" {
+			keyPaths := []string{
+				fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s/privkey.pem", vh.Domain),
+				fmt.Sprintf("/etc/letsencrypt/live/%s/privkey.pem", vh.Domain),
+			}
+			for _, kp := range keyPaths {
+				if fileExists(kp) {
+					vh.SSLKeyPath = kp
+					break
+				}
+			}
+			if vh.SSLKeyPath == "" {
+				vh.SSLKeyPath = keyPaths[0]
+			}
+		}
+	}
+
 	// 2. Pastikan nginx.conf memuat include conf.d/*.conf
 	EnsureNginxInclude()
 
@@ -132,7 +170,7 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 		return fmt.Errorf("gagal menulis file konfigurasi %s: %w", confPath, err)
 	}
 
-	// 3. Tes konfigurasi Nginx di FreeBSD: `nginx -t`
+	// 4. Tes konfigurasi Nginx di FreeBSD: `nginx -t`
 	testRes, err := m.runner.ExecWithTimeout(5*time.Second, "nginx", "-t")
 	if err != nil {
 		// Rollback file jika config error
@@ -140,28 +178,79 @@ func (m *Manager) CreateOrUpdate(vh *VHostConfig) error {
 		return fmt.Errorf("nginx -t gagal, konfigurasi di-rollback: %s (%w)", testRes.Stderr, err)
 	}
 
-	// 4. Reload Nginx tanpa downtime: `service nginx reload`
+	// 5. Reload Nginx tanpa downtime: `service nginx reload`
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "nginx", "reload")
 	return nil
 }
 
-// IssueSSL menerbitkan sertifikat Let's Encrypt / self-signed certificate.
+// IssueSSL menerbitkan sertifikat resmi Let's Encrypt menggunakan Certbot.
 func (m *Manager) IssueSSL(domain, docRoot string) error {
-	certDir := filepath.Join("/usr/local/etc/letsencrypt/live", domain)
-	_ = os.MkdirAll(certDir, 0755)
+	docRoot = filepath.Clean(docRoot)
 
-	fullchain := filepath.Join(certDir, "fullchain.pem")
-	privkey := filepath.Join(certDir, "privkey.pem")
+	// Pastikan direktori acme challenge ada dan dapat dibaca oleh publik
+	acmeDir := filepath.Join(docRoot, ".well-known", "acme-challenge")
+	_ = os.MkdirAll(acmeDir, 0755)
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "chmod", "-R", "755", filepath.Join(docRoot, ".well-known"))
 
-	// Jika certbot tersedia di FreeBSD, coba jalankan
-	_, err := m.runner.ExecWithTimeout(60*time.Second, "certbot", "certonly", "--webroot", "-w", docRoot, "-d", domain, "--non-interactive", "--agree-tos", "--register-unsafely-without-email")
-	if err != nil || (!fileExists(fullchain)) {
-		// Buat self-signed certificate sementara jika certbot belum ada atau domain belum terarah ke server
-		_, _ = m.runner.ExecWithTimeout(10*time.Second, "openssl", "req", "-x509", "-nodes", "-days", "365",
-			"-newkey", "rsa:2048",
-			"-keyout", privkey,
-			"-out", fullchain,
-			"-subj", fmt.Sprintf("/CN=%s", domain))
+	// Cek apakah certbot terpasang di FreeBSD; jika belum, otomatis install
+	if !fileExists("/usr/local/bin/certbot") {
+		_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "py311-certbot")
+		if !fileExists("/usr/local/bin/certbot") {
+			_, _ = m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", "certbot")
+		}
+	}
+
+	// Jalankan Certbot resmi Let's Encrypt dengan webroot mode
+	res, err := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
+		"--webroot",
+		"-w", docRoot,
+		"-d", domain,
+		"--non-interactive",
+		"--agree-tos",
+		"--register-unsafely-without-email",
+		"--force-renewal",
+	)
+
+	// Cek apakah berkas sertifikat resmi Let's Encrypt berhasil dibuat
+	certPaths := []string{
+		fmt.Sprintf("/usr/local/etc/letsencrypt/live/%s/fullchain.pem", domain),
+		fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain),
+	}
+
+	var foundCert string
+	for _, cp := range certPaths {
+		if fileExists(cp) {
+			foundCert = cp
+			break
+		}
+	}
+
+	if foundCert == "" {
+		// Coba metode standalone jika webroot gagal
+		resNginx, errNginx := m.runner.ExecWithTimeout(120*time.Second, "certbot", "certonly",
+			"--nginx",
+			"-d", domain,
+			"--non-interactive",
+			"--agree-tos",
+			"--register-unsafely-without-email",
+		)
+		for _, cp := range certPaths {
+			if fileExists(cp) {
+				foundCert = cp
+				break
+			}
+		}
+
+		if foundCert == "" {
+			errMsg := res.Stderr
+			if errMsg == "" {
+				errMsg = res.Stdout
+			}
+			if errMsg == "" && errNginx != nil {
+				errMsg = resNginx.Stderr
+			}
+			return fmt.Errorf("Let's Encrypt gagal menerbitkan sertifikat untuk %s: %s (%w)", domain, errMsg, err)
+		}
 	}
 
 	return nil
