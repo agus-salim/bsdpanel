@@ -58,20 +58,14 @@
                                     <span>🔒</span>
                                     <span>SSL Aktif</span>
                                 </span>
-                                <form method="POST" action="/api/vhosts/ssl" class="inline">
-                                    <input type="hidden" name="domain" value="{{.Domain}}">
-                                    <button type="submit" class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 transition" title="Perbarui / Terbitkan Ulang Let's Encrypt">
-                                        Perbarui
-                                    </button>
-                                </form>
+                                <button type="button" onclick="issueSSL('{{.Domain}}')" class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 transition" title="Perbarui sertifikat Let's Encrypt">
+                                    Perbarui
+                                </button>
                                 {{else}}
-                                <form method="POST" action="/api/vhosts/ssl" class="inline">
-                                    <input type="hidden" name="domain" value="{{.Domain}}">
-                                    <button type="submit" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[10px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm" title="Terbitkan SSL Let's Encrypt Otomatis">
-                                        <span>🛡️</span>
-                                        <span>Pasang Let's Encrypt</span>
-                                    </button>
-                                </form>
+                                <button type="button" onclick="issueSSL('{{.Domain}}')" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[10px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm" title="Terbitkan SSL Let's Encrypt Otomatis">
+                                    <span>🛡️</span>
+                                    <span>Pasang Let's Encrypt</span>
+                                </button>
                                 {{end}}
                             </div>
                         </td>
@@ -95,13 +89,10 @@
                             </a>
 
                             <!-- Icon SSL Toggle / Terbitkan Ulang -->
-                            <form method="POST" action="/api/vhosts/ssl" class="inline">
-                                <input type="hidden" name="domain" value="{{.Domain}}">
-                                <button type="submit" title="Terbitkan / Perbarui SSL Let's Encrypt"
-                                    class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded border border-slate-700 transition shadow-sm">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                                </button>
-                            </form>
+                            <button type="button" onclick="issueSSL('{{.Domain}}')" title="Terbitkan / Perbarui SSL Let's Encrypt"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded border border-slate-700 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            </button>
 
                             <!-- Hapus Domain -->
                             <form method="POST" action="/api/vhosts/delete" onsubmit="return confirm('Hapus konfigurasi domain {{.Domain}}?')" class="inline">
@@ -123,6 +114,62 @@
                     {{end}}
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Modal Loading & Status Let's Encrypt SSL Interaktif -->
+    <div id="sslModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md p-6 sm:p-7 shadow-2xl space-y-5 text-center">
+            
+            <!-- State 1: Animasi Loading -->
+            <div id="sslLoadingState" class="space-y-4">
+                <div class="relative w-16 h-16 mx-auto">
+                    <div class="w-16 h-16 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center text-xl animate-pulse">🔒</div>
+                </div>
+                <div>
+                    <h4 class="text-base font-bold text-white">Menerbitkan SSL Let's Encrypt</h4>
+                    <p id="sslLoadingDomain" class="text-xs text-emerald-400 font-mono mt-1 font-semibold"></p>
+                    <p class="text-[11px] text-slate-400 mt-2.5 leading-relaxed">
+                        Menghubungkan ke ACME Server & memverifikasi domain...<br>
+                        <span class="text-slate-500">Proses ini memakan waktu sekitar 10-25 detik, mohon tunggu.</span>
+                    </p>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-1.5 rounded-full animate-pulse w-3/4 mx-auto"></div>
+                </div>
+            </div>
+
+            <!-- State 2: Sukses -->
+            <div id="sslSuccessState" class="hidden space-y-4">
+                <div class="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl mx-auto shadow-lg shadow-emerald-500/10">
+                    ✓
+                </div>
+                <div>
+                    <h4 class="text-base font-bold text-white">SSL Berhasil Diterbitkan!</h4>
+                    <p id="sslSuccessMsg" class="text-xs text-slate-300 mt-1"></p>
+                    <p class="text-[11px] text-emerald-400 font-mono mt-1 font-semibold">HTTPS Resmi Let's Encrypt Telah Aktif</p>
+                </div>
+                <button onclick="window.location.reload()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs transition shadow-sm">
+                    Selesai & Muat Ulang Halaman
+                </button>
+            </div>
+
+            <!-- State 3: Gagal / Error -->
+            <div id="sslErrorState" class="hidden space-y-4">
+                <div class="w-14 h-14 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center text-2xl mx-auto shadow-lg shadow-rose-500/10">
+                    ✕
+                </div>
+                <div>
+                    <h4 class="text-base font-bold text-white">Gagal Menerbitkan SSL</h4>
+                    <p class="text-xs text-slate-400 mt-1">Detail respons dari Certbot / Let's Encrypt:</p>
+                    <div id="sslErrorMsg" class="text-left bg-slate-950 border border-rose-500/20 rounded-xl p-3.5 text-[11px] text-rose-300 font-mono mt-2 overflow-x-auto max-h-48 leading-relaxed break-words whitespace-pre-wrap"></div>
+                </div>
+                <button onclick="document.getElementById('sslModal').classList.add('hidden')" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs border border-slate-700 transition">
+                    Tutup
+                </button>
+            </div>
+
         </div>
     </div>
 
@@ -180,4 +227,55 @@
     </div>
 
 </div>
+
+<!-- Script AJAX Pemanggilan SSL dengan Animasi Loading -->
+<script>
+async function issueSSL(domain) {
+    const modal = document.getElementById('sslModal');
+    const loadingState = document.getElementById('sslLoadingState');
+    const successState = document.getElementById('sslSuccessState');
+    const errorState = document.getElementById('sslErrorState');
+    const loadingDomain = document.getElementById('sslLoadingDomain');
+    const successMsg = document.getElementById('sslSuccessMsg');
+    const errorMsg = document.getElementById('sslErrorMsg');
+
+    loadingDomain.textContent = domain;
+    loadingState.classList.remove('hidden');
+    successState.classList.add('hidden');
+    errorState.classList.add('hidden');
+    modal.classList.remove('hidden');
+
+    try {
+        const formData = new FormData();
+        formData.append('domain', domain);
+
+        const response = await fetch('/api/vhosts/ssl', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+        loadingState.classList.add('hidden');
+
+        if (data.success) {
+            successState.classList.remove('hidden');
+            successMsg.textContent = data.message || ('Sertifikat SSL Let\'s Encrypt untuk ' + domain + ' berhasil diterbitkan!');
+            // Auto reload setelah 2.5 detik
+            setTimeout(() => {
+                window.location.reload();
+            }, 2500);
+        } else {
+            errorState.classList.remove('hidden');
+            errorMsg.textContent = data.error || 'Terjadi kegagalan saat memproses sertifikat Let\'s Encrypt.';
+        }
+    } catch (err) {
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+        errorMsg.textContent = 'Gagal berkomunikasi dengan server BSDPanel: ' + err.message;
+    }
+}
+</script>
 {{end}}

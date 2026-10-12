@@ -417,8 +417,10 @@ func (s *Server) handleAPIVHostCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
+
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/vhosts?err=Form+invalid", http.StatusSeeOther)
+		s.respondSSL(w, r, isJSON, false, "Form data tidak valid")
 		return
 	}
 
@@ -426,26 +428,53 @@ func (s *Server) handleVHostSSL(w http.ResponseWriter, r *http.Request) {
 	s.vhostsMu.Lock()
 	defer s.vhostsMu.Unlock()
 
+	var target *webserver.VHostConfig
 	for i := range s.vhostsList {
 		if s.vhostsList[i].Domain == domain {
-			err := s.vhostMgr.IssueSSL(domain, s.vhostsList[i].DocumentRoot)
-			if err != nil {
-				s.vhostsList[i].SSLEnabled = false
-				_ = s.vhostMgr.CreateOrUpdate(&s.vhostsList[i])
-				http.Redirect(w, r, fmt.Sprintf("/vhosts?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
-				return
-			}
-
-			s.vhostsList[i].SSLEnabled = true
-			if err := s.vhostMgr.CreateOrUpdate(&s.vhostsList[i]); err != nil {
-				http.Redirect(w, r, fmt.Sprintf("/vhosts?err=%s", url.QueryEscape(err.Error())), http.StatusSeeOther)
-				return
-			}
+			target = &s.vhostsList[i]
 			break
 		}
 	}
 
-	http.Redirect(w, r, "/vhosts?msg=Sertifikat+SSL+Let%27s+Encrypt+berhasil+diterbitkan+dan+aktif!", http.StatusSeeOther)
+	if target == nil {
+		s.respondSSL(w, r, isJSON, false, fmt.Sprintf("Domain '%s' tidak ditemukan dalam daftar virtual host", domain))
+		return
+	}
+
+	// Terbitkan sertifikat Let's Encrypt
+	err := s.vhostMgr.IssueSSL(domain, target.DocumentRoot)
+	if err != nil {
+		target.SSLEnabled = false
+		_ = s.vhostMgr.CreateOrUpdate(target)
+		s.respondSSL(w, r, isJSON, false, "Gagal menerbitkan Let's Encrypt: "+err.Error())
+		return
+	}
+
+	target.SSLEnabled = true
+	if err := s.vhostMgr.CreateOrUpdate(target); err != nil {
+		s.respondSSL(w, r, isJSON, false, "Gagal memperbarui konfigurasi webserver: "+err.Error())
+		return
+	}
+
+	s.respondSSL(w, r, isJSON, true, fmt.Sprintf("Sertifikat SSL Let's Encrypt untuk %s berhasil diterbitkan dan aktif!", domain))
+}
+
+func (s *Server) respondSSL(w http.ResponseWriter, r *http.Request, isJSON, success bool, msg string) {
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": success,
+			"message": msg,
+			"error":   msg,
+		})
+		return
+	}
+
+	if success {
+		http.Redirect(w, r, fmt.Sprintf("/vhosts?msg=%s", url.QueryEscape(msg)), http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, fmt.Sprintf("/vhosts?err=%s", url.QueryEscape(msg)), http.StatusSeeOther)
+	}
 }
 
 func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
