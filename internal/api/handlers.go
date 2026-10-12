@@ -730,6 +730,109 @@ func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/vhosts?msg=Domain+berhasil+dihapus", http.StatusSeeOther)
 }
 
+func (s *Server) handleVHostLogs(w http.ResponseWriter, r *http.Request) {
+	domain := strings.TrimSpace(r.URL.Query().Get("domain"))
+	logType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+	if logType == "" {
+		logType = "error"
+	}
+	linesCount, _ := strconv.Atoi(r.URL.Query().Get("lines"))
+	if linesCount <= 0 {
+		linesCount = 100
+	}
+	if linesCount > 500 {
+		linesCount = 500
+	}
+
+	var candidateFiles []string
+	if logType == "error" {
+		if domain != "" {
+			candidateFiles = append(candidateFiles,
+				fmt.Sprintf("/var/log/nginx/%s_ssl_error.log", domain),
+				fmt.Sprintf("/var/log/nginx/%s_error.log", domain),
+			)
+		}
+		candidateFiles = append(candidateFiles,
+			"/var/log/nginx/error.log",
+			"/var/log/php-fpm.log",
+		)
+	} else if logType == "access" {
+		if domain != "" {
+			candidateFiles = append(candidateFiles,
+				fmt.Sprintf("/var/log/nginx/%s_ssl_access.log", domain),
+				fmt.Sprintf("/var/log/nginx/%s_access.log", domain),
+			)
+		}
+		candidateFiles = append(candidateFiles,
+			"/var/log/nginx/access.log",
+		)
+	} else if logType == "database" || logType == "db" {
+		candidateFiles = append(candidateFiles,
+			"/var/log/postgresql.log",
+			"/var/log/messages",
+		)
+	}
+
+	var logOutput strings.Builder
+	var filesRead []string
+
+	for _, file := range candidateFiles {
+		if _, err := os.Stat(file); err == nil {
+			tailContent := tailFile(file, linesCount)
+			if len(tailContent) > 0 {
+				filesRead = append(filesRead, file)
+				logOutput.WriteString(fmt.Sprintf("=== Berkas Log: %s ===\n", file))
+				logOutput.WriteString(tailContent)
+				logOutput.WriteString("\n\n")
+			}
+		}
+	}
+
+	if logOutput.Len() == 0 {
+		logOutput.WriteString(fmt.Sprintf("Belum ada catatan aktivitas log untuk '%s' (%s).\n\nJalur berkas yang diperiksa:\n- %s", domain, logType, strings.Join(candidateFiles, "\n- ")))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"domain":    domain,
+		"type":      logType,
+		"files":     filesRead,
+		"content":   strings.TrimSpace(logOutput.String()),
+		"timestamp": time.Now().Format("2006-01-02 15:04:05"),
+	})
+}
+
+func tailFile(path string, n int) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil || stat.Size() == 0 {
+		return ""
+	}
+
+	maxRead := int64(512 * 1024)
+	if stat.Size() > maxRead {
+		offset := stat.Size() - maxRead
+		_, _ = file.Seek(offset, io.SeekStart)
+	}
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(string(bytes), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (s *Server) handleAPIServiceAction(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Redirect(w, r, "/services?err=Form+tidak+valid", http.StatusSeeOther)

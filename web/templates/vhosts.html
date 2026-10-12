@@ -108,6 +108,12 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                             </button>
 
+                            <!-- Icon Log Domain (Error & Access Log) -->
+                            <button type="button" onclick="openLogModal('{{.Domain}}')" title="Lihat Log Error & Aktivitas Domain"
+                                class="inline-flex items-center justify-center p-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 rounded border border-slate-700 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            </button>
+
                             <!-- Hapus Domain -->
                             <form method="POST" action="/api/vhosts/delete" onsubmit="return confirm('Hapus konfigurasi domain {{.Domain}}?')" class="inline">
                                 <input type="hidden" name="domain" value="{{.Domain}}">
@@ -342,10 +348,161 @@
     </div>
 </div>
 
+<!-- Modal Log Viewer Real-Time Domain -->
+<div id="vhostLogModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl p-5 shadow-2xl space-y-4 flex flex-col max-h-[90vh]">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
+            <div class="flex items-center space-x-2.5">
+                <span class="text-xl">📋</span>
+                <div>
+                    <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                        <span>Log Aktivitas Domain:</span>
+                        <span id="logModalDomain" class="font-mono text-sky-400 font-bold">-</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400" id="logModalSubtitle">Catatan error dan aktivitas server Nginx & runtime PHP</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeLogModal()" class="text-slate-400 hover:text-white text-lg p-1">✕</button>
+        </div>
+
+        <!-- Toolbar: Tabs & Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-3 flex-shrink-0 text-xs">
+            <!-- Tabs -->
+            <div class="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button type="button" id="tabLogError" onclick="switchLogTab('error')"
+                    class="px-3 py-1.5 rounded-lg font-medium transition text-rose-300 bg-rose-500/20 border border-rose-500/30">
+                    ⚠️ Error Log
+                </button>
+                <button type="button" id="tabLogAccess" onclick="switchLogTab('access')"
+                    class="px-3 py-1.5 rounded-lg font-medium transition text-slate-400 hover:text-slate-200">
+                    🌐 Access Log
+                </button>
+                <button type="button" id="tabLogDB" onclick="switchLogTab('db')"
+                    class="px-3 py-1.5 rounded-lg font-medium transition text-slate-400 hover:text-slate-200">
+                    🐘 Database / Sys
+                </button>
+            </div>
+
+            <!-- Options & Refresh -->
+            <div class="flex items-center space-x-2">
+                <select id="logLineSelect" onchange="fetchDomainLogs()"
+                    class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300 focus:outline-none focus:border-emerald-500 text-xs">
+                    <option value="50">50 Baris</option>
+                    <option value="100" selected>100 Baris</option>
+                    <option value="250">250 Baris</option>
+                    <option value="500">500 Baris</option>
+                </select>
+
+                <button type="button" onclick="fetchDomainLogs()" title="Muat Ulang Log"
+                    class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center space-x-1.5 font-medium shadow-sm">
+                    <span>🔄 Segarkan</span>
+                </button>
+
+                <button type="button" onclick="copyLogContent()" title="Salin Log ke Clipboard"
+                    class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+                    <span>📋 Salin</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Terminal Log Viewer -->
+        <div class="relative flex-1 min-h-[300px] max-h-[500px] bg-slate-950 rounded-xl border border-slate-800 p-4 overflow-hidden flex flex-col font-mono text-[11px]">
+            <div id="logLoadingOverlay" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center text-emerald-400 space-x-2 z-10">
+                <span class="animate-spin text-lg">⏳</span>
+                <span>Mengambil catatan log server...</span>
+            </div>
+            <pre id="logContentArea" class="flex-1 overflow-auto text-slate-300 whitespace-pre-wrap leading-relaxed select-text font-mono"></pre>
+        </div>
+
+        <!-- Footer Info -->
+        <div class="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 pt-3 flex-shrink-0">
+            <span id="logStatusInfo">Siap</span>
+            <span id="logTimestampInfo" class="font-mono text-slate-500">-</span>
+        </div>
+    </div>
+</div>
+
 <!-- Script AJAX Pemanggilan SSL dengan Animasi Loading -->
 <script>
 let timerInterval = null;
 let secondsElapsed = 0;
+let currentLogDomain = '';
+let currentLogType = 'error';
+
+function openLogModal(domain) {
+    currentLogDomain = domain;
+    currentLogType = 'error';
+    document.getElementById('logModalDomain').textContent = domain;
+    document.getElementById('vhostLogModal').classList.remove('hidden');
+    updateLogTabButtons();
+    fetchDomainLogs();
+}
+
+function closeLogModal() {
+    document.getElementById('vhostLogModal').classList.add('hidden');
+}
+
+function switchLogTab(type) {
+    currentLogType = type;
+    updateLogTabButtons();
+    fetchDomainLogs();
+}
+
+function updateLogTabButtons() {
+    const tabs = {
+        'error': document.getElementById('tabLogError'),
+        'access': document.getElementById('tabLogAccess'),
+        'db': document.getElementById('tabLogDB'),
+    };
+    for (const [key, btn] of Object.entries(tabs)) {
+        if (!btn) continue;
+        if (key === currentLogType) {
+            btn.className = 'px-3 py-1.5 rounded-lg font-medium transition text-sky-300 bg-sky-500/20 border border-sky-500/30';
+        } else {
+            btn.className = 'px-3 py-1.5 rounded-lg font-medium transition text-slate-400 hover:text-slate-200';
+        }
+    }
+}
+
+async function fetchDomainLogs() {
+    if (!currentLogDomain) return;
+    const lines = document.getElementById('logLineSelect').value || '100';
+    const logArea = document.getElementById('logContentArea');
+    const loadingOverlay = document.getElementById('logLoadingOverlay');
+    const statusInfo = document.getElementById('logStatusInfo');
+    const timeInfo = document.getElementById('logTimestampInfo');
+
+    loadingOverlay.classList.remove('hidden');
+
+    try {
+        const resp = await fetch('/api/vhosts/logs?domain=' + encodeURIComponent(currentLogDomain) + '&type=' + encodeURIComponent(currentLogType) + '&lines=' + lines);
+        const data = await resp.json();
+        loadingOverlay.classList.add('hidden');
+
+        if (data.success) {
+            logArea.textContent = data.content || '(Log kosong)';
+            timeInfo.textContent = 'Diperbarui: ' + (data.timestamp || new Date().toLocaleTimeString());
+            statusInfo.textContent = 'Tipe: ' + currentLogType.toUpperCase() + (data.files && data.files.length ? ' • Sumber: ' + data.files.join(', ') : '');
+            logArea.scrollTop = logArea.scrollHeight;
+        } else {
+            logArea.textContent = 'Gagal memuat log: ' + (data.error || 'Kesalahan server');
+        }
+    } catch (err) {
+        loadingOverlay.classList.add('hidden');
+        logArea.textContent = 'Gagal berkomunikasi dengan server BSDPanel: ' + err.message;
+    }
+}
+
+function copyLogContent() {
+    const text = document.getElementById('logContentArea').textContent;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Catatan log berhasil disalin ke clipboard!');
+    }).catch(() => {
+        alert('Gagal menyalin log.');
+    });
+}
 
 function openDatabaseModal(domain, engine, dbName, dbUser, dbPass) {
     document.getElementById('vhostDBDomain').value = domain || '';

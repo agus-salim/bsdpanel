@@ -251,6 +251,7 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("POST /api/vhosts/create", s.handleAPIVHostCreate)
 	mux.HandleFunc("POST /api/vhosts/delete", s.handleAPIVHostDelete)
 	mux.HandleFunc("POST /api/vhosts/ssl", s.handleVHostSSL)
+	mux.HandleFunc("GET /api/vhosts/logs", s.handleVHostLogs)
 	mux.HandleFunc("POST /api/databases/save", s.handleAPIDatabaseSave)
 	mux.HandleFunc("POST /api/databases/delete", s.handleAPIDatabaseDelete)
 	mux.HandleFunc("GET /api/databases/export", s.handleAPIDatabaseExport)
