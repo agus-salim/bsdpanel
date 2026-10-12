@@ -1,0 +1,37 @@
+; ==============================================================================
+; FreeBSD PHP-FPM Pool Configuration - Managed by bsdpanel
+; Pool: {{.User}}
+; PHP:  {{.PHPVersion}}
+; ==============================================================================
+
+[{{.User}}]
+user = {{.User}}
+group = www
+
+listen = {{.SocketPath}}
+listen.owner = www
+listen.group = www
+listen.mode = 0660
+
+; Process Management
+pm = dynamic
+pm.max_children = {{if .MaxChildren}}{{.MaxChildren}}{{else}}10{{end}}
+pm.start_servers = {{if .StartServers}}{{.StartServers}}{{else}}2{{end}}
+pm.min_spare_servers = {{if .MinSpare}}{{.MinSpare}}{{else}}1{{end}}
+pm.max_spare_servers = {{if .MaxSpare}}{{.MaxSpare}}{{else}}3{{end}}
+pm.max_requests = 1000
+
+; FreeBSD Security & Chroot / Jail Jailbreak Prevention
+chroot = 
+chdir = /home/{{.User}}/public_html
+catch_workers_output = yes
+
+; PHP Direktif Kustom per User
+php_admin_value[memory_limit] = {{if .MemoryLimit}}{{.MemoryLimit}}{{else}}128M{{end}}
+php_admin_value[upload_max_filesize] = {{if .UploadMaxFilesize}}{{.UploadMaxFilesize}}{{else}}64M{{end}}
+php_admin_value[post_max_size] = {{if .PostMaxSize}}{{.PostMaxSize}}{{else}}64M{{end}}
+php_admin_value[max_execution_time] = {{if .MaxExecutionTime}}{{.MaxExecutionTime}}{{else}}60{{end}}
+php_admin_value[open_basedir] = /home/{{.User}}:/tmp:/usr/local/share/pear:/usr/local/lib/php
+php_admin_flag[display_errors] = off
+php_admin_flag[log_errors] = on
+php_admin_value[error_log] = /home/{{.User}}/logs/php_error.log

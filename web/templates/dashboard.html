@@ -1,0 +1,165 @@
+{{define "content"}}
+<div class="space-y-6">
+
+    <!-- FreeBSD Host Info Banner -->
+    <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/60 rounded-xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-2xl">
+                ⚡
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">{{.Stats.OSVersion}}</h3>
+                <p class="text-xs text-slate-400 font-mono mt-0.5">Uptime: <span class="text-emerald-400 font-semibold">{{.Stats.Uptime}}</span> | Architecture: amd64</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="window.location.reload()" class="px-3.5 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-lg flex items-center space-x-2 transition shadow-sm">
+                <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span>Refresh Metrik</span>
+            </button>
+            <a href="/vhosts" class="px-3.5 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-sm">
+                + Tambah Domain
+            </a>
+        </div>
+    </div>
+
+    <!-- Real-time Resource Gauges -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- CPU Usage -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm">
+            <div class="flex items-center justify-between pb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">CPU Usage</span>
+                <span class="px-2 py-0.5 text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">
+                    {{printf "%.1f" .Stats.CPUUsage}}%
+                </span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2.5 mb-3 overflow-hidden">
+                <div class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: {{printf "%.1f" .Stats.CPUUsage}}%"></div>
+            </div>
+            <p class="text-[11px] text-slate-500 font-mono">kern.cp_time • sysctl native</p>
+        </div>
+
+        <!-- RAM Usage -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm">
+            <div class="flex items-center justify-between pb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">RAM (FreeBSD Page Stats)</span>
+                <span class="px-2 py-0.5 text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded">
+                    {{printf "%.1f" .Stats.RAMUsage}}%
+                </span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2.5 mb-3 overflow-hidden">
+                <div class="bg-cyan-500 h-2.5 rounded-full transition-all duration-500" style="width: {{printf "%.1f" .Stats.RAMUsage}}%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                <span>Terpakai: {{.Stats.RAMUsedMB}} MB</span>
+                <span>Total: {{.Stats.RAMTotalMB}} MB</span>
+            </div>
+        </div>
+
+        <!-- ZFS/UFS Disk -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm sm:col-span-2 lg:col-span-1">
+            <div class="flex items-center justify-between pb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Penyimpanan (ZFS / Root)</span>
+                <span class="px-2 py-0.5 text-xs font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded">
+                    {{if .Stats.DiskUsage}}{{with index .Stats.DiskUsage 0}}{{.Capacity}}{{end}}{{else}}24%{{end}}
+                </span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2.5 mb-3 overflow-hidden">
+                <div class="bg-indigo-500 h-2.5 rounded-full" style="width: {{if .Stats.DiskUsage}}{{with index .Stats.DiskUsage 0}}{{.Capacity}}{{end}}{{else}}24%{{end}}"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                <span>{{if .Stats.DiskUsage}}{{with index .Stats.DiskUsage 0}}{{.Used}} digunakan{{end}}{{end}}</span>
+                <span>Sisa: {{if .Stats.DiskUsage}}{{with index .Stats.DiskUsage 0}}{{.Avail}}{{end}}{{end}}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- FreeBSD Daemon Services Overview -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40">
+            <div>
+                <h4 class="font-bold text-sm text-white">Status Layanan & Daemon (rc.d)</h4>
+                <p class="text-xs text-slate-400 mt-0.5">Pengendalian webserver, database, dan firewall FreeBSD</p>
+            </div>
+            <a href="/services" class="text-xs text-emerald-400 hover:text-emerald-300 font-medium">Lihat Semua →</a>
+        </div>
+        <div class="divide-y divide-slate-800/80">
+            {{range .Services}}
+            <div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800/30 transition">
+                <div class="flex items-center space-x-3">
+                    <span class="w-2.5 h-2.5 rounded-full {{if .Running}}bg-emerald-400 ring-4 ring-emerald-400/20{{else}}bg-rose-500 ring-4 ring-rose-500/20{{end}}"></span>
+                    <div>
+                        <span class="font-semibold text-sm text-slate-200">{{.Label}}</span>
+                        <span class="text-xs text-slate-500 font-mono ml-2">({{.Name}})</span>
+                        {{if .Pid}}<span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono ml-2">PID: {{.Pid}}</span>{{end}}
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <form method="POST" action="/api/services/action" class="inline">
+                        <input type="hidden" name="service" value="{{.Name}}">
+                        <input type="hidden" name="action" value="restart">
+                        <button type="submit" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition">
+                            Restart
+                        </button>
+                    </form>
+                    <form method="POST" action="/api/services/action" class="inline">
+                        <input type="hidden" name="service" value="{{.Name}}">
+                        <input type="hidden" name="action" value="reload">
+                        <button type="submit" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition">
+                            Reload
+                        </button>
+                    </form>
+                    <form method="POST" action="/api/services/action" class="inline">
+                        <input type="hidden" name="service" value="{{.Name}}">
+                        {{if .Running}}
+                        <input type="hidden" name="action" value="stop">
+                        <button type="submit" class="px-2.5 py-1 text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
+                            Stop
+                        </button>
+                        {{else}}
+                        <input type="hidden" name="action" value="start">
+                        <button type="submit" class="px-2.5 py-1 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/20 transition">
+                            Start
+                        </button>
+                        {{end}}
+                    </form>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Active Listening Sockets (sockstat) -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div class="p-4 border-b border-slate-800 bg-slate-900/40">
+            <h4 class="font-bold text-sm text-white">Listening Ports & Sockets (sockstat -4 -l)</h4>
+            <p class="text-xs text-slate-400 mt-0.5">Memantau port jaringan aktif langsung dari kernel FreeBSD</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-950/60 text-slate-400 font-mono border-b border-slate-800">
+                    <tr>
+                        <th class="p-3">USER</th>
+                        <th class="p-3">COMMAND</th>
+                        <th class="p-3">PID</th>
+                        <th class="p-3">PROTO</th>
+                        <th class="p-3">LOCAL ADDRESS</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800 font-mono">
+                    {{range .Stats.OpenSockets}}
+                    <tr class="hover:bg-slate-800/40">
+                        <td class="p-3 font-semibold text-emerald-400">{{.User}}</td>
+                        <td class="p-3">{{.Command}}</td>
+                        <td class="p-3 text-slate-400">{{.PID}}</td>
+                        <td class="p-3 uppercase">{{.Proto}}</td>
+                        <td class="p-3 text-cyan-400">{{.Address}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{{end}}

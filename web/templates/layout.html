@@ -1,0 +1,170 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - BSDPanel FreeBSD Control Panel</title>
+    <!-- Google Fonts: Fira Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN (dapat diganti build lokal via Makefile) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Fira Sans"', 'sans-serif'],
+                        mono: ['"Fira Code"', 'monospace'],
+                    },
+                    colors: {
+                        bsd: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#10b981',
+                            600: '#059669',
+                            800: '#064e3b',
+                            900: '#022c22',
+                            dark: '#0f172a',
+                            panel: '#1e293b',
+                            card: '#334155',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Fira Sans', sans-serif;
+            background-color: #0b1120;
+            color: #f1f5f9;
+        }
+        code, pre {
+            font-family: 'Fira Code', monospace;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- Mobile Header -->
+    <header class="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <span class="text-2xl">😈</span>
+            <span class="font-bold text-lg tracking-wider text-emerald-400">BSD<span class="text-white">Panel</span></span>
+        </div>
+        <button id="mobileMenuBtn" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white focus:outline-none">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 min-h-screen">
+        <!-- Logo Brand -->
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl filter drop-shadow">😈</span>
+                <div>
+                    <h1 class="font-bold text-xl tracking-wide text-emerald-400">BSD<span class="text-slate-100">Panel</span></h1>
+                    <p class="text-xs text-slate-400 font-mono">FreeBSD Native</p>
+                </div>
+            </div>
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">v1.0.0</span>
+        </div>
+
+        <!-- Menu Links -->
+        <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+            <div class="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Main Menu</div>
+            <a href="/" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "dashboard"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                <span>Dashboard</span>
+            </a>
+
+            <a href="/vhosts" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "vhosts"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                <span>Virtual Hosts</span>
+            </a>
+
+            <a href="/services" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "services"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <span>FreeBSD Services</span>
+            </a>
+
+            <a href="/php" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "php"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                <span>PHP Management</span>
+            </a>
+
+            <div class="pt-4 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">System & Tools</div>
+            <div class="px-3 py-2 text-xs text-slate-500 flex items-center justify-between">
+                <span>Kernel</span>
+                <span class="font-mono text-slate-300">GENERIC</span>
+            </div>
+            <div class="px-3 py-2 text-xs text-slate-500 flex items-center justify-between">
+                <span>File System</span>
+                <span class="font-mono text-emerald-400">OpenZFS</span>
+            </div>
+        </nav>
+
+        <!-- User Footer & Logout -->
+        <div class="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30">
+                    AD
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-xs font-semibold text-slate-200 truncate">admin</p>
+                    <p class="text-[10px] text-emerald-400 font-mono">root / wheel</p>
+                </div>
+            </div>
+            <a href="/logout" title="Keluar" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <!-- Top Bar Header -->
+        <header class="bg-slate-900/60 backdrop-blur border-b border-slate-800 px-6 py-3.5 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <h2 class="text-lg font-semibold text-white tracking-tight">{{.Title}}</h2>
+                <span class="hidden sm:inline-block px-2.5 py-0.5 text-xs font-medium bg-slate-800 text-slate-300 rounded-full border border-slate-700">
+                    FreeBSD Host
+                </span>
+            </div>
+            <div class="flex items-center space-x-3 text-xs">
+                <div class="flex items-center space-x-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-md font-mono">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>ONLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Body Content -->
+        <main class="flex-1 overflow-y-auto p-6 bg-[#0b1120]">
+            {{template "content" .}}
+        </main>
+    </div>
+
+</body>
+</html>
+{{end}}

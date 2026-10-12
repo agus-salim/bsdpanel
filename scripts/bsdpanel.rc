@@ -1,0 +1,42 @@
+#!/bin/sh
+
+# PROVIDE: bsdpanel
+# REQUIRE: DAEMON NETWORKING LOGIN
+# KEYWORD: shutdown
+#
+# Tambahkan baris ini ke /etc/rc.conf untuk mengaktifkan bsdpanel:
+# bsdpanel_enable="YES"
+#
+# Variabel opsional:
+# bsdpanel_config (path):    Default "/usr/local/etc/bsdpanel/config.json"
+# bsdpanel_listen (string):  Default ":8080"
+# bsdpanel_user (user):      Default "root" (dibutuhkan untuk manajemen jail/vhost/service)
+
+. /etc/rc.subr
+
+name="bsdpanel"
+rcvar="bsdpanel_enable"
+
+load_rc_config $name
+
+: ${bsdpanel_enable:="NO"}
+: ${bsdpanel_config:="/usr/local/etc/bsdpanel/config.json"}
+: ${bsdpanel_listen:=":8080"}
+: ${bsdpanel_user:="root"}
+
+pidfile="/var/run/${name}.pid"
+procname="/usr/local/sbin/bsdpanel"
+command="/usr/sbin/daemon"
+command_args="-c -f -p ${pidfile} ${procname} -config ${bsdpanel_config} -listen ${bsdpanel_listen}"
+
+start_precmd="bsdpanel_prestart"
+
+bsdpanel_prestart()
+{
+    if [ ! -d "/usr/local/etc/bsdpanel" ]; then
+        mkdir -p /usr/local/etc/bsdpanel
+        chmod 750 /usr/local/etc/bsdpanel
+    fi
+}
+
+run_rc_command "$1"

@@ -1,0 +1,61 @@
+{{define "content"}}
+<div class="space-y-6">
+
+    <div>
+        <h3 class="text-base font-bold text-white">Manajemen Konfigurasi PHP (PHP-FPM Pool & php.ini)</h3>
+        <p class="text-xs text-slate-400 mt-1">Konfigurasi batas resource PHP terisolasi per user akun tanpa mempengaruhi akun lain di server.</p>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-sm max-w-2xl">
+        <form method="POST" action="/api/php/pool" class="space-y-5 text-xs">
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">User Akun UNIX</label>
+                <input type="text" name="user" required value="webuser1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Versi PHP</label>
+                    <select name="php_version" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                        <option value="php83">PHP 8.3 (FreeBSD pkg)</option>
+                        <option value="php82">PHP 8.2 (FreeBSD pkg)</option>
+                        <option value="php81">PHP 8.1 (FreeBSD pkg)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Memory Limit</label>
+                    <select name="memory_limit" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                        <option value="128M">128M (Standar)</option>
+                        <option value="256M" selected>256M (Direkomendasikan)</option>
+                        <option value="512M">512M (Tinggi)</option>
+                        <option value="1024M">1024M (Enterprise)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Upload Max Filesize</label>
+                    <select name="upload_max_filesize" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                        <option value="32M">32M</option>
+                        <option value="64M" selected>64M</option>
+                        <option value="128M">128M</option>
+                        <option value="256M">256M</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Max Execution Time (Detik)</label>
+                    <input type="number" name="max_execution_time" value="60" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono">
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-800 flex justify-end">
+                <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Simpan & Reload PHP-FPM
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{{end}}

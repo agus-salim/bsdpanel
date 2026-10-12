@@ -1,16 +1,14 @@
 # Binaries
-*.exe
-bsdpanel.exe
-bsdpanel-freebsd
-
-# Database & Runtime
-*.db
-*.db-wal
-*.db-shm
-*.log
-
-# Dependencies
-node_modules/
+bin/
 dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test & OS artifacts
+*.test
+*.out
 .DS_Store
 Thumbs.db

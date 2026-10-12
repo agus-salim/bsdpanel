@@ -1,120 +1,147 @@
-# BSDPanel — Native FreeBSD Web Hosting Control Panel
+# BSDPanel 😈
 
-**BSDPanel** adalah Web Hosting Control Panel modern, ringan, dan berperforma tinggi yang dirancang khusus untuk berjalan secara natif di atas sistem operasi **FreeBSD**.
+**BSDPanel** adalah Web Hosting Control Panel modern, mandiri (*single static binary*), dan ultra-ringan yang dirancang khusus untuk sistem operasi **FreeBSD**. 
 
----
-
-## 🚀 Fitur Utama & Integrasi FreeBSD
-
-1. **Backend Mandiri (Single Binary Go):**
-   - Dikompilasi menjadi satu binary executable mandiri (`/usr/local/sbin/bsdpanel`).
-   - Sangat hemat memori (~20-40 MB RAM) dan tanpa runtime berat seperti Python atau Ruby.
-   - Manajemen database panel internal berbasis **SQLite (WAL Mode)**.
-
-2. **Web Terminal Terintegrasi (xterm.js & WebSocket PTY):**
-   - Menggunakan pseudo-terminal (PTY) interaktif FreeBSD di `/bin/sh`.
-   - Mendukung eksekusi langsung ke dalam container FreeBSD Jail via `/usr/sbin/jexec <jail_name> /bin/sh`.
-   - Deteksi otomatis *window resize* (`cols`, `rows`) untuk kenyamanan penggunaan `htop`, `vi`, `top`, dll.
-
-3. **Nginx Reverse Proxy GUI:**
-   - GUI untuk mengatur target upstream (contoh: `http://127.0.0.1:3000`, `http://127.0.0.1:8080`).
-   - Opsi switch WebSocket upgrade (`Upgrade $http_upgrade; Connection "upgrade"`).
-   - Pengaturan Client Max Body Size dan Proxy Buffering.
-   - **Validasi Syntax Otomatis:** Memanggil `/usr/local/sbin/nginx -t` sebelum reload, mencegah website down jika ada kesalahan konfigurasi.
-
-4. **Sertifikat SSL Otomatis Let's Encrypt (ACME):**
-   - Penerbitan otomatis via protokol ACME (didukung `certbot` atau `acme.sh` di FreeBSD).
-   - Otomatis memperbarui file konfigurasi Virtual Host Nginx dengan parameter HTTPS, HTTP/2, TLSv1.2 & TLSv1.3 modern.
-
-5. **Multi-PHP Management (PHP 8.1, 8.2, 8.3):**
-   - Menjalankan berbagai versi PHP secara berdampingan memanfaatkan port FreeBSD `lang/php81`, `lang/php82`, `lang/php83`.
-   - Tiap versi berkomunikasi melalui UNIX Domain Socket (`/var/run/php{version}-fpm.sock`) untuk latensi terendah.
-
-6. **Isolasi Keamanan & Storage FreeBSD:**
-   - **FreeBSD Jails (`jail` / `jexec`):** Mengisolasi akun pengguna ke dalam container level kernel yang sangat aman.
-   - **ZFS Dataset & Quota:** Setiap website dan user memiliki dataset ZFS tersendiri (`zroot/bsdpanel/{user}/{domain}`) dengan snapshot berkala instan.
-   - **PF (Packet Filter):** Integrasi firewall bawaan FreeBSD untuk proteksi brute force dan rate-limiting.
-
-7. **Frontend Modern (Vue 3 + Tailwind CSS):**
-   - Tipografi elegan menggunakan **Fira Sans** & **Fira Code**.
-   - Desain modern bernuansa *dark mode*.
+Dibangun dengan **Go (Golang)** dan antarmuka web responsif berbasis **Tailwind CSS** dengan font **Fira Sans**, BSDPanel mengutamakan performa tinggi, jejak memori minimal (< 15MB RSS RAM), keamanan tingkat kernel FreeBSD, serta kemudahan instalasi.
 
 ---
 
-## 📂 Struktur Direktori
+## 🌟 Fitur Utama
+
+- **Single Binary Mandiri:** Semua template HTML, CSS, dan aset di-embed langsung ke dalam satu binary Go (`embed.FS`). Tidak memerlukan runtime eksternal (Node.js/Python).
+- **FreeBSD Native Process Orchestration:** Terintegrasi langsung dengan perkakas native FreeBSD:
+  - `service` dan `rc.d` untuk pengelolaan daemon tanpa downtime (*graceful reload*).
+  - `pw` untuk isolasi akun pengguna UNIX FreeBSD.
+  - `pkg` untuk manajemen paket dan dependensi.
+  - `sysctl` & `sockstat` untuk pemantauan CPU, RAM (*page stats*), dan port terbuka secara real-time.
+  - Dukungan filesystem **OpenZFS** dan UFS.
+- **Multi-Webserver:** Orkestrasi otomatis untuk **Nginx** dan **Apache 2.4** dengan pengujian konfigurasi otomatis (`nginx -t`) dan rollback jika terjadi kegagalan sintaks.
+- **Multi-PHP Isolation:** Isolasi pool PHP-FPM per user melalui UNIX domain socket (`/var/run/php{version}-fpm-{user}.sock`) dengan penyesuaian direktif `php.ini` (`memory_limit`, `upload_max_filesize`, `max_execution_time`).
+- **Multi-Database:** Manajemen database dan user untuk **MariaDB/MySQL** dan **PostgreSQL**.
+- **Autentikasi Aman:** Token sesi stateless berbasis HMAC-SHA256 dengan Role-Based Access Control (RBAC).
+
+---
+
+## 📁 Struktur Direktori Proyek
 
 ```text
 bsdpanel/
-├── backend/
-│   ├── cmd/
-│   │   └── server/
-│   │       └── main.go               # Entry point, HTTP server & graceful shutdown
-│   ├── internal/
-│   │   ├── api/
-│   │   │   └── handlers.go           # REST API & WebSocket Terminal Route
-│   │   ├── config/
-│   │   │   └── config.go             # Parser konfigurasi panel.yaml
-│   │   ├── database/
-│   │   │   └── db.go                 # SQLite WAL mode & Schema DDL
-│   │   ├── ssl/
-│   │   │   └── acme.go               # ACME Let's Encrypt Certificate Manager
-│   │   ├── system/
-│   │   │   └── freebsd.go            # FreeBSD Controller (service, sysctl, zfs, jail)
-│   │   ├── terminal/
-│   │   │   ├── terminal.go           # WebSocket upgrader & session multiplexer
-│   │   │   ├── pty_unix.go           # PTY driver FreeBSD/Unix (creack/pty & jexec)
-│   │   │   └── pty_windows.go        # Windows dev mode fallback
-│   │   └── vhost/
-│   │       └── generator.go          # VHost Generator (PHP, Reverse Proxy, nginx -t)
-│   ├── go.mod
-│   └── go.sum
-├── frontend/
-│   ├── src/
-│   │   ├── views/
-│   │   │   ├── Dashboard.vue         # Status FreeBSD ZFS ARC, Load, Jails & Services
-│   │   │   ├── Websites.vue          # Manajemen Web, Nginx Proxy GUI & Let's Encrypt
-│   │   │   └── Terminal.vue          # Web Terminal interaktif (xterm.js + PTY)
-│   │   ├── App.vue                   # Layout utama, sidebar & top navbar
-│   │   ├── main.js                   # Inisialisasi Vue 3, Pinia & Vue Router
-│   │   └── style.css                 # Setup Tailwind & Font Fira Sans / Fira Code
-│   ├── index.html                    # Loader Google Font Fira Sans & Fira Code
-│   ├── tailwind.config.js
-│   └── vite.config.js
-├── config/
-│   └── panel.yaml                    # Konfigurasi sistem BSDPanel
-└── scripts/
-    ├── rc.d/
-    │   └── bsdpanel                  # FreeBSD rc.d daemon script (/usr/local/etc/rc.d)
-    └── setup-freebsd.sh              # Script instalasi otomatis ports/pkg FreeBSD
+├── cmd/
+│   └── bsdpanel/
+│       └── main.go                  # Entry point, flag parsing & graceful shutdown
+├── internal/
+│   ├── api/
+│   │   ├── router.go                # HTTP router standar Go 1.22+ & middleware
+│   │   └── handlers.go              # Handler dashboard, vhosts, services, & API
+│   ├── auth/
+│   │   └── auth.go                  # Stateless HMAC session & RBAC
+│   ├── config/
+│   │   └── config.go                # Konfigurasi & default FreeBSD paths
+│   ├── database/
+│   │   └── database.go              # Wrapper MariaDB/MySQL & PostgreSQL
+│   ├── php/
+│   │   └── php_fpm.go               # Generator & manager pool PHP-FPM FreeBSD
+│   ├── system/
+│   │   ├── runner.go                # Safe exec.Command wrapper (timeout & mock support)
+│   │   ├── service.go               # rc.d & sysrc wrapper (/etc/rc.conf)
+│   │   ├── stats.go                 # sysctl, df, sockstat FreeBSD metrics collector
+│   │   ├── user.go                  # pw useradd / userdel UNIX isolation
+│   │   └── pkg.go                   # pkg install & query wrapper
+│   └── webserver/
+│       └── vhost.go                 # Nginx & Apache virtual host orchestrator
+├── web/
+│   ├── templates/                   # Go html/template
+│   │   ├── layout.html              # Layout utama Tailwind CSS + Fira Sans
+│   │   ├── dashboard.html           # Dashboard metrik & status layanan
+│   │   ├── vhosts.html              # Antarmuka manajemen domain
+│   │   ├── services.html            # Pengendali daemon FreeBSD
+│   │   └── php.html                 # Pengaturan direktif PHP
+│   ├── static/                      # Aset statis pendukung
+│   └── embed.go                     # Directive //go:embed
+├── templates/
+│   ├── nginx/
+│   │   └── vhost.conf.tmpl          # Template vhost Nginx teroptimasi FreeBSD
+│   └── php-fpm/
+│       └── pool.conf.tmpl           # Template pool PHP-FPM terisolasi per user
+├── scripts/
+│   ├── bsdpanel.rc                  # FreeBSD rc.subr init script (/usr/local/etc/rc.d)
+│   └── install.sh                   # One-line installer FreeBSD (/bin/sh)
+├── Makefile                         # Skrip kompilasi cross-platform & release
+├── go.mod                           # Go Module definisi
+└── README.md
 ```
 
 ---
 
-## 🛠 Panduan Build & Deployment di FreeBSD
+## 🚀 Instalasi Cepat di FreeBSD
 
-### 1. Build Backend Go
-```bash
-cd backend
-# Kompilasi langsung di mesin FreeBSD:
-go build -ldflags="-s -w" -o /usr/local/sbin/bsdpanel ./cmd/server
+Jalankan perintah berikut di FreeBSD server Anda sebagai `root`:
 
-# Cross-compile dari Windows/Linux untuk FreeBSD:
-GOOS=freebsd GOARCH=amd64 go build -ldflags="-s -w" -o bsdpanel ./cmd/server
+```sh
+# Menggunakan skrip installer otomatis:
+fetch -o - https://raw.githubusercontent.com/agus-salim/bsdpanel/main/scripts/install.sh | sh
 ```
 
-### 2. Build Frontend Vue 3
-```bash
-cd frontend
-npm install
-npm run build
+Atau unduh dan jalankan manual:
+
+```sh
+git clone https://github.com/agus-salim/bsdpanel.git
+cd bsdpanel
+sh scripts/install.sh
 ```
 
-### 3. Setup FreeBSD Host & Menjalankan Daemon
-```bash
-sh scripts/setup-freebsd.sh
-cp scripts/rc.d/bsdpanel /usr/local/etc/rc.d/bsdpanel
-chmod +x /usr/local/etc/rc.d/bsdpanel
-sysrc bsdpanel_enable="YES"
+Installer akan otomatis:
+1. Memverifikasi OS FreeBSD (amd64).
+2. Memasang dependensi dasar via `pkg install` (`nginx`, `php83`, `mariadb1011-server`, dll).
+3. Memasang binary ke `/usr/local/sbin/bsdpanel`.
+4. Memasang skrip rc.d ke `/usr/local/etc/rc.d/bsdpanel`.
+5. Mengaktifkan daemon di `/etc/rc.conf` via `sysrc bsdpanel_enable="YES"`.
+6. Menjalankan layanan pada port `8080`.
+
+---
+
+## 🛠️ Kompilasi & Pembangunan (Cross-Compile)
+
+Anda dapat mengompilasi binary FreeBSD langsung dari komputer lokal Anda (Linux/macOS/Windows) tanpa memerlukan mesin FreeBSD berkat kapabilitas Go cross-compilation:
+
+```sh
+# Kompilasi khusus untuk target FreeBSD amd64:
+make build-freebsd
+
+# Hasil binary berada di:
+# bin/freebsd_amd64/bsdpanel
+```
+
+Untuk menguji UI secara lokal di lingkungan pengembangan (Windows/Mac/Linux):
+```sh
+make run-dev
+# Buka http://localhost:8080 di browser
+```
+
+---
+
+## ⚙️ Pengendalian Layanan di FreeBSD
+
+BSDPanel terintegrasi dengan sistem `rc.d` FreeBSD:
+
+```sh
+# Memeriksa status panel:
+service bsdpanel status
+
+# Menyalakan panel:
 service bsdpanel start
+
+# Mematikan panel:
+service bsdpanel stop
+
+# Memuat ulang / restart:
+service bsdpanel restart
 ```
-Akses control panel di: `http://IP_SERVER:8083`
+
+Konfigurasi disimpan di `/usr/local/etc/bsdpanel/config.json`.
+
+---
+
+## 📄 Lisensi
+
+BSD 2-Clause License. Hak Cipta (c) Agus Salim.

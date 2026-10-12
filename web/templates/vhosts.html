@@ -1,0 +1,120 @@
+{{define "content"}}
+<div class="space-y-6">
+
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h3 class="text-base font-bold text-white">Manajemen Virtual Host (VHost)</h3>
+            <p class="text-xs text-slate-400 mt-1">Isolasi domain per user UNIX FreeBSD dengan Nginx dan PHP-FPM socket pool</p>
+        </div>
+        <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-sm flex items-center space-x-2">
+            <span>+ Tambah Virtual Host Baru</span>
+        </button>
+    </div>
+
+    <!-- Daftar Domain -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                    <tr>
+                        <th class="p-4">Domain</th>
+                        <th class="p-4">User Sistem</th>
+                        <th class="p-4">Web Server</th>
+                        <th class="p-4">PHP Runtime</th>
+                        <th class="p-4">Document Root</th>
+                        <th class="p-4 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                    {{if .VHosts}}
+                    {{range .VHosts}}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-4 font-semibold text-white flex items-center space-x-2">
+                            <span>🌐</span>
+                            <a href="http://{{.Domain}}" target="_blank" class="text-emerald-400 hover:underline">{{.Domain}}</a>
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2 py-0.5 font-mono text-[11px] bg-slate-800 text-slate-300 rounded border border-slate-700">
+                                {{.User}}
+                            </span>
+                        </td>
+                        <td class="p-4 uppercase font-semibold text-cyan-400">{{.Webserver}}</td>
+                        <td class="p-4">
+                            <span class="px-2 py-0.5 rounded font-mono text-[11px] {{if eq .PHPVersion "none"}}bg-slate-800 text-slate-400{{else}}bg-indigo-500/10 text-indigo-400 border border-indigo-500/20{{end}}">
+                                {{.PHPVersion}}
+                            </span>
+                        </td>
+                        <td class="p-4 font-mono text-slate-400 text-[11px]">{{.DocumentRoot}}</td>
+                        <td class="p-4 text-right">
+                            <form method="POST" action="/api/vhosts/delete" onsubmit="return confirm('Hapus konfigurasi domain {{.Domain}}?')" class="inline">
+                                <input type="hidden" name="domain" value="{{.Domain}}">
+                                <button type="submit" class="px-2.5 py-1 text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/20 transition">
+                                    Hapus
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {{end}}
+                    {{else}}
+                    <tr>
+                        <td colspan="6" class="p-8 text-center text-slate-500">
+                            Belum ada virtual host yang terdaftar. Klik tombol di atas untuk membuat domain pertama.
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Tambah VHost -->
+    <div id="addModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-white">Tambah Domain & Virtual Host Baru</h3>
+                <button onclick="document.getElementById('addModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <form method="POST" action="/api/vhosts/create" class="space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Nama Domain</label>
+                    <input type="text" name="domain" required placeholder="example.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">User Sistem FreeBSD (pw)</label>
+                        <input type="text" name="user" required placeholder="webuser1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Web Server</label>
+                        <select name="webserver" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                            <option value="nginx">Nginx</option>
+                            <option value="apache24">Apache 2.4</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Versi PHP (Pool Terisolasi)</label>
+                        <select name="php_version" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                            <option value="php83">PHP 8.3 (Default)</option>
+                            <option value="php82">PHP 8.2</option>
+                            <option value="php81">PHP 8.1</option>
+                            <option value="none">Static (Tanpa PHP)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-semibold mb-1">Document Root</label>
+                        <input type="text" name="document_root" placeholder="Otomatis /home/{user}/public_html" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                    <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg">Buat VHost & User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{{end}}
