@@ -136,6 +136,12 @@
                                 <span>📦 Kompres</span>
                             </button>
 
+                            <!-- Rename Berkas / Folder -->
+                            <button type="button" onclick="openRenameModal('{{$.CurrentPath}}/{{.Name}}', '{{.Name}}')" title="Ubah Nama Berkas/Folder"
+                                class="inline-flex items-center px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 rounded border border-slate-700 transition text-[11px]">
+                                <span>✏️ Rename</span>
+                            </button>
+
                             <!-- Edit Berkas Teks -->
                             {{if not .IsDir}}
                             <a href="/files/edit?path={{$.CurrentPath}}/{{.Name}}" class="inline-flex items-center px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition text-[11px]">
@@ -241,6 +247,40 @@
             <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
                 <button type="button" onclick="document.getElementById('newFileModal').classList.add('hidden')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
                 <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">Buat</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Ubah Nama (Rename) Berkas / Folder -->
+<div id="renameModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>✏️</span>
+                <span>Ubah Nama Berkas / Folder</span>
+            </h3>
+            <button type="button" onclick="closeRenameModal()" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="/api/files/rename" class="space-y-4 text-xs">
+            <input type="hidden" name="old_path" id="renameOldPath">
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <p class="text-[11px] text-slate-400">Nama Saat Ini:</p>
+                <p class="font-mono font-bold text-emerald-400 text-sm mt-0.5 break-all" id="renameCurrentName">-</p>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-semibold mb-1">Nama Baru</label>
+                <input type="text" name="new_name" id="renameNewName" required placeholder="nama_baru"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                <button type="button" onclick="closeRenameModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition shadow-sm">
+                    Simpan Perubahan
+                </button>
             </div>
         </form>
     </div>
@@ -657,6 +697,28 @@ function openExtractModal(fullPath, name) {
 
 function closeExtractModal() {
     document.getElementById('extractModal').classList.add('hidden');
+}
+
+// Modal Ubah Nama (Rename) Berkas / Folder
+function openRenameModal(fullPath, name) {
+    document.getElementById('renameOldPath').value = fullPath;
+    document.getElementById('renameCurrentName').textContent = name;
+    const input = document.getElementById('renameNewName');
+    input.value = name;
+    document.getElementById('renameModal').classList.remove('hidden');
+    setTimeout(function() {
+        input.focus();
+        const dotIndex = name.lastIndexOf('.');
+        if (dotIndex > 0) {
+            input.setSelectionRange(0, dotIndex);
+        } else {
+            input.select();
+        }
+    }, 50);
+}
+
+function closeRenameModal() {
+    document.getElementById('renameModal').classList.add('hidden');
 }
 </script>
 {{end}}

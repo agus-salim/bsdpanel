@@ -378,6 +378,85 @@ func (s *Server) handleFileSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=Berkas+berhasil+disimpan!", filepath.Dir(path)), http.StatusSeeOther)
 }
 
+func (s *Server) handleFileRename(w http.ResponseWriter, r *http.Request) {
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
+
+	oldPath := filepath.Clean(strings.TrimSpace(r.FormValue("old_path")))
+	newName := strings.TrimSpace(r.FormValue("new_name"))
+
+	if oldPath == "" || oldPath == "/" || oldPath == "." {
+		if isJSON {
+			s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Jalur berkas tidak valid"})
+			return
+		}
+		http.Redirect(w, r, "/files?err=Jalur+berkas+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	parentDir := filepath.Dir(oldPath)
+
+	if newName == "" {
+		if isJSON {
+			s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Nama baru tidak boleh kosong"})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Nama+baru+tidak+boleh+kosong", url.QueryEscape(parentDir)), http.StatusSeeOther)
+		return
+	}
+
+	// Cegah karakter terlarang atau path traversal
+	if strings.Contains(newName, "/") || strings.Contains(newName, "\\") || newName == ".." || newName == "." {
+		if isJSON {
+			s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Nama baru mengandung karakter tidak valid"})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Nama+baru+mengandung+karakter+tidak+valid", url.QueryEscape(parentDir)), http.StatusSeeOther)
+		return
+	}
+
+	newPath := filepath.Join(parentDir, newName)
+
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		if isJSON {
+			s.respondJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": "Berkas asal tidak ditemukan"})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Berkas+asal+tidak+ditemukan", url.QueryEscape(parentDir)), http.StatusSeeOther)
+		return
+	}
+
+	if _, err := os.Stat(newPath); err == nil && oldPath != newPath {
+		if isJSON {
+			s.respondJSON(w, http.StatusConflict, map[string]interface{}{"success": false, "error": "Berkas atau folder dengan nama tersebut sudah ada"})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Berkas+atau+folder+dengan+nama+tersebut+sudah+ada", url.QueryEscape(parentDir)), http.StatusSeeOther)
+		return
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		if isJSON {
+			s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "Gagal mengubah nama: " + err.Error()})
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/files?path=%s&err=Gagal+mengubah+nama:+%s", url.QueryEscape(parentDir), url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Nama berhasil diubah menjadi %s", newName)
+	if isJSON {
+		s.respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"message":  msg,
+			"old_path": oldPath,
+			"new_path": newPath,
+			"new_name": newName,
+		})
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?path=%s&msg=%s", url.QueryEscape(parentDir), url.QueryEscape(msg)), http.StatusSeeOther)
+}
+
 func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	paths := r.Form["paths"]

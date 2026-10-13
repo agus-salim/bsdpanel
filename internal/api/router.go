@@ -305,6 +305,7 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("POST /api/users/update", s.handleUpdateUser)
 	mux.HandleFunc("POST /api/files/create", s.handleFileCreate)
 	mux.HandleFunc("POST /api/files/save", s.handleFileSave)
+	mux.HandleFunc("POST /api/files/rename", s.handleFileRename)
 	mux.HandleFunc("POST /api/files/delete", s.handleFileDelete)
 	mux.HandleFunc("POST /api/files/upload", s.handleFileUpload)
 	mux.HandleFunc("POST /api/files/compress", s.handleFileCompress)
