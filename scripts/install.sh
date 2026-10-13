@@ -68,10 +68,12 @@ mkdir -p /home
 
 chmod 750 /usr/local/etc/bsdpanel
 
-# Pastikan nginx.conf memuat berkas konfigurasi virtual host dari conf.d
+# Pastikan nginx.conf memuat berkas konfigurasi virtual host dari conf.d dan batas upload 1024M
 if [ -f "/usr/local/etc/nginx/nginx.conf" ]; then
     if ! grep -q "conf.d/\*\.conf" /usr/local/etc/nginx/nginx.conf; then
-        sed -i '' 's|http {|http {\n    include /usr/local/etc/nginx/conf.d/*.conf;|' /usr/local/etc/nginx/nginx.conf
+        sed -i '' 's|http {|http {\n    include /usr/local/etc/nginx/conf.d/*.conf;\n    client_max_body_size 1024M;|' /usr/local/etc/nginx/nginx.conf
+    elif ! grep -q "client_max_body_size" /usr/local/etc/nginx/nginx.conf; then
+        sed -i '' 's|http {|http {\n    client_max_body_size 1024M;|' /usr/local/etc/nginx/nginx.conf
     fi
 fi
 

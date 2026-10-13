@@ -30,6 +30,9 @@ server {
     listen [::]:80;
     server_name {{.Domain}};
 
+    # Batas ukuran upload file (File Manager, Backup, dsb.)
+    client_max_body_size 1024M;
+
     # Let's Encrypt ACME Challenge
     location /.well-known/acme-challenge/ {
         root {{.ACMEDir}};
@@ -51,8 +54,10 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        client_max_body_size 1024M;
+        proxy_request_buffering off;
     }
     {{end}}
 }
@@ -62,6 +67,9 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name {{.Domain}};
+
+    # Batas ukuran upload file (File Manager, Backup, dsb.)
+    client_max_body_size 1024M;
 
     ssl_certificate     {{.SSLCertPath}};
     ssl_certificate_key {{.SSLKeyPath}};
@@ -82,8 +90,10 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        client_max_body_size 1024M;
+        proxy_request_buffering off;
     }
 }
 {{end}}
@@ -212,4 +222,40 @@ func (m *Manager) ConfigurePanelProxy(domain, rawPort string, sslEnabled bool) (
 	}
 
 	return false, nil
+}
+
+// EnsureGlobalNginxUploadLimit memastikan konfigurasi Nginx (/usr/local/etc/nginx/nginx.conf dan proxy panel)
+// mendukung upload berkas hingga 1024M.
+func (m *Manager) EnsureGlobalNginxUploadLimit() {
+	reloaded := false
+
+	nginxConf := "/usr/local/etc/nginx/nginx.conf"
+	if content, err := os.ReadFile(nginxConf); err == nil {
+		str := string(content)
+		if !strings.Contains(str, "client_max_body_size") {
+			if strings.Contains(str, "http {") {
+				newStr := strings.Replace(str, "http {", "http {\n    client_max_body_size 1024M;", 1)
+				if writeErr := os.WriteFile(nginxConf, []byte(newStr), 0644); writeErr == nil {
+					reloaded = true
+				}
+			}
+		}
+	}
+
+	proxyConfPath := filepath.Join(m.vhostDir, "bsdpanel_proxy.conf")
+	if content, err := os.ReadFile(proxyConfPath); err == nil {
+		str := string(content)
+		if !strings.Contains(str, "client_max_body_size") {
+			newStr := strings.ReplaceAll(str, "server_name ", "client_max_body_size 1024M;\n    server_name ")
+			newStr = strings.ReplaceAll(newStr, "proxy_pass ", "client_max_body_size 1024M;\n        proxy_request_buffering off;\n        proxy_pass ")
+			if writeErr := os.WriteFile(proxyConfPath, []byte(newStr), 0644); writeErr == nil {
+				reloaded = true
+			}
+		}
+	}
+
+	if reloaded && m.runner != nil {
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "nginx", "-t")
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "nginx", "reload")
+	}
 }

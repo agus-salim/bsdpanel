@@ -83,6 +83,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name {{.Domain}};
+    client_max_body_size 1024M;
 
     # Let's Encrypt ACME Challenge
     location /.well-known/acme-challenge/ {
@@ -101,6 +102,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass_header Server;
+        client_max_body_size 1024M;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
     {{else}}
     {{if .SSLEnabled}}
@@ -133,6 +138,7 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name {{.Domain}};
+    client_max_body_size 1024M;
 
     ssl_certificate     {{.SSLCertPath}};
     ssl_certificate_key {{.SSLKeyPath}};
@@ -151,6 +157,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_pass_header Server;
+        client_max_body_size 1024M;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
     {{else}}
     root {{.DocumentRoot}};
@@ -201,8 +211,14 @@ php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
 	}
 
 	// Pastikan daemon PHP-FPM spesifik versi aktif di FreeBSD
-	for _, vKey := range []string{"php82", "php83", "php84"} {
+	for _, vKey := range []string{"php82", "php83", "php84", "php85"} {
 		phpMgr.EnsureVersionFPMService(vKey)
+	}
+
+	// Pastikan reverse proxy Nginx mengizinkan upload berkas besar (1024M)
+	vhostMgr.EnsureGlobalNginxUploadLimit()
+	if cfg.PanelDomain != "" {
+		_, _ = vhostMgr.ConfigurePanelProxy(cfg.PanelDomain, cfg.ListenAddr, cfg.PanelSSL)
 	}
 
 	// Buat server HTTP
@@ -212,11 +228,12 @@ php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
 	}
 
 	httpServer := &http.Server{
-		Addr:         cfg.ListenAddr,
-		Handler:      srv.SetupRouter(),
-		ReadTimeout:  60 * time.Second,
-		WriteTimeout: 300 * time.Second, // 5 menit untuk proses ACME Let's Encrypt / instalasi paket
-		IdleTimeout:  120 * time.Second,
+		Addr:              cfg.ListenAddr,
+		Handler:           srv.SetupRouter(),
+		ReadHeaderTimeout: 30 * time.Second,
+		ReadTimeout:       600 * time.Second,  // 10 menit untuk upload berkas besar
+		WriteTimeout:      600 * time.Second, // 10 menit untuk ACME SSL / instalasi paket / ekstraksi zip
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Channel shutdown anggun (graceful shutdown)

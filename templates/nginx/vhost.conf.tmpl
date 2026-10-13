@@ -9,6 +9,9 @@ server {
     listen [::]:80;
     server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
 
+    # Batas ukuran upload file (1GB)
+    client_max_body_size 1024M;
+
     # Lokasi Let's Encrypt ACME Challenge (Wajib selalu bisa diakses via HTTP port 80)
     location /.well-known/acme-challenge/ {
         root {{.DocumentRoot}};
@@ -24,6 +27,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass_header Server;
+        client_max_body_size 1024M;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
     {{else}}
     {{if .SSLEnabled}}
@@ -92,6 +99,9 @@ server {
     listen [::]:443 ssl http2;
     server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
 
+    # Batas ukuran upload file (1GB)
+    client_max_body_size 1024M;
+
     ssl_certificate     {{.SSLCertPath}};
     ssl_certificate_key {{.SSLKeyPath}};
     ssl_protocols       TLSv1.2 TLSv1.3;
@@ -119,6 +129,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_pass_header Server;
+        client_max_body_size 1024M;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
     {{else}}
     # Perlindungan file tersembunyi

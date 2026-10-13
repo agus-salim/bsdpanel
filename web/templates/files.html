@@ -427,10 +427,18 @@ function uploadFiles(fileList) {
             }, 600);
         } else {
             let errMsg = 'Gagal mengunggah berkas.';
-            try {
-                const res = JSON.parse(xhr.responseText);
-                if (res.error) errMsg = res.error;
-            } catch(e) {}
+            if (xhr.status === 413) {
+                errMsg = 'Gagal mengunggah: Ukuran berkas melebihi batas yang diizinkan server web (413 Payload/Entity Too Large).';
+            } else {
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (res.error) errMsg = res.error;
+                } catch(e) {
+                    if (xhr.statusText) {
+                        errMsg = 'Gagal mengunggah berkas: ' + xhr.status + ' ' + xhr.statusText;
+                    }
+                }
+            }
             alert(errMsg);
             modal.classList.add('hidden');
         }

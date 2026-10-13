@@ -416,7 +416,7 @@ func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
 
-	if err := r.ParseMultipartForm(512 << 20); err != nil {
+	if err := r.ParseMultipartForm(1024 << 20); err != nil {
 		if isJSON {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -467,6 +467,16 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 				if copyErr == nil {
 					uploadedFiles = append(uploadedFiles, safeName)
+
+					// Atur kepemilikan file agar sesuai dengan user pemilik direktori /home/<user>
+					if strings.HasPrefix(dir, "/home/") {
+						sub := strings.TrimPrefix(dir, "/home/")
+						parts := strings.Split(sub, string(os.PathSeparator))
+						if len(parts) > 0 && parts[0] != "" {
+							ownerUser := parts[0]
+							_, _ = s.sysRunner.ExecWithTimeout(3*time.Second, "chown", fmt.Sprintf("%s:www", ownerUser), targetPath)
+						}
+					}
 				}
 			}
 		}
