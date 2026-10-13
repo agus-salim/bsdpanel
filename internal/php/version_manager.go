@@ -341,6 +341,8 @@ run_rc_command "\$1"
 		_ = os.WriteFile(rcFile, []byte(rcContent), 0755)
 	}
 
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "sysrc", "php_fpm_enable=NO")
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "stop")
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "sysrc", fmt.Sprintf("%s_fpm_enable=YES", key))
 	if m.checkFPMStatus(key, "") != "running" {
 		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", key), "start")

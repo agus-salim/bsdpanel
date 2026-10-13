@@ -55,45 +55,55 @@ func (m *Manager) CreateOrUpdatePool(cfg PoolConfig) error {
 		return fmt.Errorf("gagal render template pool: %w", err)
 	}
 
-	// 1. Simpan di direktori pool generic (default /usr/local/etc/php-fpm.d)
-	_ = os.MkdirAll(m.poolDir, 0755)
-	poolFilePath := filepath.Join(m.poolDir, fmt.Sprintf("%s.conf", cfg.User))
-	if err := os.WriteFile(poolFilePath, buf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("gagal menulis file pool %s: %w", poolFilePath, err)
+	// 1. Bersihkan pool lama milik user ini dari versi PHP lain agar tidak bentrok socket
+	supportedVersions := []string{"php82", "php83", "php84", "php85"}
+	for _, v := range supportedVersions {
+		if v != cfg.PHPVersion {
+			oldPoolFile := fmt.Sprintf("/usr/local/etc/%s-fpm.d/%s.conf", v, cfg.User)
+			if _, err := os.Stat(oldPoolFile); err == nil {
+				_ = os.Remove(oldPoolFile)
+				_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", v), "reload")
+			}
+		}
+	}
+	// Bersihkan juga dari folder generic php-fpm.d
+	_ = os.Remove(filepath.Join(m.poolDir, fmt.Sprintf("%s.conf", cfg.User)))
+
+	// Hapus socket lama jika ada agar bersih saat re-bind
+	if cfg.SocketPath != "" {
+		_ = os.Remove(cfg.SocketPath)
 	}
 
-	// 2. Simpan juga di direktori pool versi spesifik (misal /usr/local/etc/php83-fpm.d)
+	// 2. Simpan di direktori pool versi spesifik (misal /usr/local/etc/php83-fpm.d)
+	targetDir := m.poolDir
 	if cfg.PHPVersion != "" {
-		versionPoolDir := fmt.Sprintf("/usr/local/etc/%s-fpm.d", cfg.PHPVersion)
-		_ = os.MkdirAll(versionPoolDir, 0755)
-		versionPoolFile := filepath.Join(versionPoolDir, fmt.Sprintf("%s.conf", cfg.User))
-		_ = os.WriteFile(versionPoolFile, buf.Bytes(), 0644)
+		targetDir = fmt.Sprintf("/usr/local/etc/%s-fpm.d", cfg.PHPVersion)
+	}
+	_ = os.MkdirAll(targetDir, 0755)
+	targetFile := filepath.Join(targetDir, fmt.Sprintf("%s.conf", cfg.User))
+	if err := os.WriteFile(targetFile, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("gagal menulis file pool %s: %w", targetFile, err)
 	}
 
-	// Reload daemon php-fpm FreeBSD: coba service spesifik lalu fallback generic php_fpm
+	// 3. Restart daemon FPM versi spesifik
 	if cfg.PHPVersion != "" {
 		serviceName := fmt.Sprintf("%s_fpm", cfg.PHPVersion)
-		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "reload")
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "restart")
 	}
-	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "reload")
+
 	return nil
 }
 
 // DeletePool menghapus file pool dan mereload daemon.
 func (m *Manager) DeletePool(user, phpVersion string) error {
-	poolFilePath := filepath.Join(m.poolDir, fmt.Sprintf("%s.conf", user))
-	_ = os.Remove(poolFilePath)
-
-	if phpVersion != "" {
-		versionPoolFile := filepath.Join(fmt.Sprintf("/usr/local/etc/%s-fpm.d", phpVersion), fmt.Sprintf("%s.conf", user))
-		_ = os.Remove(versionPoolFile)
+	supportedVersions := []string{"php82", "php83", "php84", "php85"}
+	for _, v := range supportedVersions {
+		poolFile := fmt.Sprintf("/usr/local/etc/%s-fpm.d/%s.conf", v, user)
+		if _, err := os.Stat(poolFile); err == nil {
+			_ = os.Remove(poolFile)
+			_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", v), "reload")
+		}
 	}
-
-	serviceName := "php_fpm"
-	if phpVersion != "" {
-		serviceName = fmt.Sprintf("%s_fpm", phpVersion)
-		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "reload")
-	}
-	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "reload")
+	_ = os.Remove(filepath.Join(m.poolDir, fmt.Sprintf("%s.conf", user)))
 	return nil
 }
