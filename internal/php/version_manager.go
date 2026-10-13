@@ -202,7 +202,20 @@ func (m *Manager) checkInstalled(key string, defaultVerKey string) (bool, string
 		return true, fullVer, binPath
 	}
 
-	// 3. Cek apakah ini default PHP yang sedang aktif
+	// 3. Cek apakah binary default /usr/local/bin/php adalah versi ini
+	phpBin := "/usr/local/bin/php"
+	if _, err := os.Stat(phpBin); err == nil {
+		fullVer := m.getBinaryVersion(phpBin)
+		verNum := strings.TrimPrefix(key, "php") // "84" -> "8.4"
+		if len(verNum) == 2 {
+			prefix := fmt.Sprintf("%c.%c", verNum[0], verNum[1])
+			if strings.HasPrefix(fullVer, prefix) {
+				return true, fullVer, phpBin
+			}
+		}
+	}
+
+	// 4. Cek apakah ini default PHP yang sedang aktif
 	if defaultVerKey == key {
 		binPath := "/usr/local/bin/php"
 		if _, err := os.Stat(binPath); err == nil {
@@ -278,11 +291,17 @@ func (m *Manager) resolveIniPath(key string, installed bool) string {
 
 // resolveExtDir menentukan folder penyimpanan file .ini ekstensi.
 func (m *Manager) resolveExtDir(key string) string {
+	// 1. Cek folder versi khusus jika ada file .ini di dalamnya
 	versionDir := fmt.Sprintf("/usr/local/etc/%s", key)
-	if _, err := os.Stat(versionDir); err == nil {
-		return versionDir
+	if entries, err := os.ReadDir(versionDir); err == nil {
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".ini") {
+				return versionDir
+			}
+		}
 	}
 
+	// 2. Folder default FreeBSD untuk ekstensi PHP
 	defaultDir := "/usr/local/etc/php"
 	if _, err := os.Stat(defaultDir); err == nil {
 		return defaultDir
@@ -293,8 +312,46 @@ func (m *Manager) resolveExtDir(key string) string {
 
 // InstallVersion memasang paket PHP FreeBSD via pkg.
 func (m *Manager) InstallVersion(key string) (string, error) {
-	// Install paket utama dan paket ekstensi esensial
-	// Contoh: pkg install -y php82 php82-session php82-filter php82-ctype ...
+	// 1. Simpan binary dan ekstensi versi aktif saat ini ke direktori spesifiknya sebelum paket diubah
+	phpBin := "/usr/local/bin/php"
+	if _, err := os.Stat(phpBin); err == nil {
+		curVer := m.getBinaryVersion(phpBin) // misal "8.4.26"
+		if len(curVer) >= 3 {
+			vMajorMinor := strings.ReplaceAll(curVer[:3], ".", "") // "84"
+			oldKey := fmt.Sprintf("php%s", vMajorMinor)
+			oldKeyBin := fmt.Sprintf("/usr/local/bin/%s", oldKey)
+			if _, statErr := os.Stat(oldKeyBin); os.IsNotExist(statErr) {
+				if binData, readErr := os.ReadFile(phpBin); readErr == nil {
+					_ = os.WriteFile(oldKeyBin, binData, 0755)
+				}
+			}
+			oldFpm := "/usr/local/sbin/php-fpm"
+			oldKeyFpm := fmt.Sprintf("/usr/local/sbin/%s-fpm", oldKey)
+			if _, statErr := os.Stat(oldKeyFpm); os.IsNotExist(statErr) {
+				if fpmData, readErr := os.ReadFile(oldFpm); readErr == nil {
+					_ = os.WriteFile(oldKeyFpm, fpmData, 0755)
+				}
+			}
+
+			// Salin ekstensi yang sudah ada ke folder versi spesifik /usr/local/etc/<oldKey>
+			oldExtDir := fmt.Sprintf("/usr/local/etc/%s", oldKey)
+			_ = os.MkdirAll(oldExtDir, 0755)
+			if entries, err := os.ReadDir("/usr/local/etc/php"); err == nil {
+				for _, entry := range entries {
+					src := filepath.Join("/usr/local/etc/php", entry.Name())
+					dst := filepath.Join(oldExtDir, entry.Name())
+					if data, err := os.ReadFile(src); err == nil {
+						_ = os.WriteFile(dst, data, 0644)
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Bersihkan konflik paket lama jika ada
+	_, _ = m.runner.ExecWithTimeout(60*time.Second, "pkg", "delete", "-y", "php8*")
+
+	// 3. Install paket PHP baru dan modul ekstensi lengkap via pkg FreeBSD
 	pkgsToInstall := []string{
 		key,
 		fmt.Sprintf("%s-session", key),
@@ -323,7 +380,31 @@ func (m *Manager) InstallVersion(key string) (string, error) {
 		return res.Stderr, fmt.Errorf("pkg install gagal untuk %s: %s (%w)", key, res.Stderr, err)
 	}
 
-	// Pastikan php.ini tersedia
+	// 4. Salin binary ke /usr/local/bin/<key> agar versi spesifik selalu tersedia di FreeBSD
+	keyBin := fmt.Sprintf("/usr/local/bin/%s", key)
+	if binData, readErr := os.ReadFile(phpBin); readErr == nil {
+		_ = os.WriteFile(keyBin, binData, 0755)
+	}
+	fpmBin := "/usr/local/sbin/php-fpm"
+	keyFpm := fmt.Sprintf("/usr/local/sbin/%s-fpm", key)
+	if fpmData, readErr := os.ReadFile(fpmBin); readErr == nil {
+		_ = os.WriteFile(keyFpm, fpmData, 0755)
+	}
+
+	// Simpan juga ekstensi ke folder /usr/local/etc/<key>
+	keyExtDir := fmt.Sprintf("/usr/local/etc/%s", key)
+	_ = os.MkdirAll(keyExtDir, 0755)
+	if entries, err := os.ReadDir("/usr/local/etc/php"); err == nil {
+		for _, entry := range entries {
+			src := filepath.Join("/usr/local/etc/php", entry.Name())
+			dst := filepath.Join(keyExtDir, entry.Name())
+			if data, err := os.ReadFile(src); err == nil {
+				_ = os.WriteFile(dst, data, 0644)
+			}
+		}
+	}
+
+	// 5. Pastikan php.ini tersedia
 	iniPath := m.resolveIniPath(key, true)
 	if _, err := os.Stat(iniPath); os.IsNotExist(err) {
 		_ = os.MkdirAll(filepath.Dir(iniPath), 0755)
@@ -335,15 +416,14 @@ func (m *Manager) InstallVersion(key string) (string, error) {
 		}
 	}
 
-	// Aktifkan di rc.conf
+	// 6. Aktifkan di rc.conf
 	svcKey := fmt.Sprintf("%s_fpm_enable", key)
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "sysrc", fmt.Sprintf("%s=YES", svcKey))
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "sysrc", "php_fpm_enable=YES")
 
-	// Start FPM service
-	svcName := fmt.Sprintf("%s_fpm", key)
-	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", svcName, "start")
+	// 7. Restart FPM service
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", "php_fpm", "restart")
+	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", fmt.Sprintf("%s_fpm", key), "restart")
 
 	return res.Stdout, nil
 }
@@ -355,13 +435,25 @@ func (m *Manager) UninstallVersion(key string) (string, error) {
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", svcName, "stop")
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "sysrc", fmt.Sprintf("%s_fpm_enable=NO", key))
 
-	// Hapus paket
-	res, err := m.runner.ExecWithTimeout(120*time.Second, "pkg", "delete", "-y", key)
-	if err != nil {
-		return res.Stderr, fmt.Errorf("pkg delete gagal untuk %s: %s (%w)", key, res.Stderr, err)
+	// Hapus binary khusus dan folder ekstensi
+	_ = os.Remove(fmt.Sprintf("/usr/local/bin/%s", key))
+	_ = os.Remove(fmt.Sprintf("/usr/local/sbin/%s-fpm", key))
+	_ = os.RemoveAll(fmt.Sprintf("/usr/local/etc/%s", key))
+
+	// Jika ini versi yang sedang terpasang aktif di sistem FreeBSD, hapus via pkg
+	phpBin := "/usr/local/bin/php"
+	if curVer := m.getBinaryVersion(phpBin); curVer != "" {
+		vMajorMinor := strings.ReplaceAll(curVer[:3], ".", "")
+		if fmt.Sprintf("php%s", vMajorMinor) == key {
+			res, err := m.runner.ExecWithTimeout(120*time.Second, "pkg", "delete", "-y", key)
+			if err != nil {
+				return res.Stderr, fmt.Errorf("pkg delete gagal untuk %s: %s (%w)", key, res.Stderr, err)
+			}
+			return res.Stdout, nil
+		}
 	}
 
-	return res.Stdout, nil
+	return fmt.Sprintf("PHP %s berhasil dicopot dari sistem.", key), nil
 }
 
 // GetIniSettings membaca konfigurasi php.ini untuk versi tertentu.

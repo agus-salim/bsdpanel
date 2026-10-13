@@ -83,10 +83,18 @@
                             </span>
                         </td>
                         <td class="p-3.5 uppercase font-semibold text-cyan-400">{{.Webserver}}</td>
-                        <td class="p-3.5">
-                            <span class="px-2 py-0.5 rounded font-mono text-[11px] {{if eq .PHPVersion "none"}}bg-slate-800 text-slate-400{{else}}bg-indigo-500/10 text-indigo-400 border border-indigo-500/20{{end}}">
-                                {{.PHPVersion}}
-                            </span>
+                        <td class="p-3.5 whitespace-nowrap">
+                            <div class="relative inline-block">
+                                <select onchange="switchVHostPHP('{{.Domain}}', this.value, this)"
+                                    data-prev="{{.PHPVersion}}" title="Ganti Runtime PHP untuk {{.Domain}}"
+                                    class="bg-slate-950/80 hover:bg-slate-900 border border-indigo-500/30 hover:border-indigo-400 focus:border-indigo-500 text-indigo-300 hover:text-indigo-200 text-xs font-mono font-medium rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer transition shadow-sm">
+                                    <option value="php85" {{if eq .PHPVersion "php85"}}selected{{end}}>PHP 8.5</option>
+                                    <option value="php84" {{if eq .PHPVersion "php84"}}selected{{end}}>PHP 8.4</option>
+                                    <option value="php83" {{if eq .PHPVersion "php83"}}selected{{end}}>PHP 8.3</option>
+                                    <option value="php82" {{if eq .PHPVersion "php82"}}selected{{end}}>PHP 8.2</option>
+                                    <option value="none" {{if eq .PHPVersion "none"}}selected{{end}}>Static (No PHP)</option>
+                                </select>
+                            </div>
                         </td>
                         <td class="p-3.5 font-mono text-slate-400 text-[11px]">{{.DocumentRoot}}</td>
                         <td class="p-3.5 text-right space-x-1.5 whitespace-nowrap">
@@ -772,6 +780,53 @@ function checkDeleteConfirm() {
             btn.disabled = true;
             btn.className = 'px-4 py-2 bg-slate-800 text-slate-500 cursor-not-allowed font-semibold rounded-lg transition';
         }
+    }
+}
+
+// PHP Version Switcher Interaktif Langsung dari Baris Tabel
+async function switchVHostPHP(domain, phpVersion, selectEl) {
+    if (!domain || !phpVersion) return;
+    const prevVal = selectEl ? (selectEl.getAttribute('data-prev') || 'php83') : 'php83';
+
+    if (selectEl) {
+        selectEl.disabled = true;
+        selectEl.classList.add('opacity-50', 'pointer-events-none');
+    }
+
+    showToast('Mengalihkan PHP untuk ' + domain + ' ke ' + phpVersion + '...', 'info');
+
+    try {
+        const params = new URLSearchParams();
+        params.append('domain', domain);
+        params.append('php_version', phpVersion);
+
+        const resp = await fetch('/api/vhosts/switch-php', {
+            method: 'POST',
+            body: params.toString(),
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            }
+        });
+
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            if (selectEl) {
+                selectEl.setAttribute('data-prev', phpVersion);
+                selectEl.disabled = false;
+                selectEl.classList.remove('opacity-50', 'pointer-events-none');
+            }
+            showToast('✓ ' + (data.message || ('PHP ' + phpVersion + ' berhasil diaktifkan!')), 'success');
+        } else {
+            throw new Error(data.error || 'Gagal mengubah versi PHP');
+        }
+    } catch (err) {
+        if (selectEl) {
+            selectEl.value = prevVal;
+            selectEl.disabled = false;
+            selectEl.classList.remove('opacity-50', 'pointer-events-none');
+        }
+        showToast('Gagal beralih versi PHP: ' + err.message, 'error');
     }
 }
 </script>

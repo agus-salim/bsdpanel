@@ -47,18 +47,56 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #475569;
         }
+
+        /* Sidebar collapsed state (minimize) on desktop/widescreen */
+        @media (min-width: 768px) {
+            aside.sidebar-collapsed {
+                width: 4.5rem !important; /* 72px */
+            }
+            aside.sidebar-collapsed .sidebar-text,
+            aside.sidebar-collapsed .sidebar-badge,
+            aside.sidebar-collapsed .sidebar-footer-details {
+                display: none !important;
+            }
+            aside.sidebar-collapsed .sidebar-brand {
+                justify-content: center !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            aside.sidebar-collapsed nav a {
+                justify-content: center !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            aside.sidebar-collapsed .sidebar-category {
+                text-align: center !important;
+                font-size: 8px !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+            aside.sidebar-collapsed .sidebar-footer {
+                justify-content: center !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            aside.sidebar-collapsed .sidebar-logout-btn {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-emerald-500 selection:text-white">
 
     <!-- Mobile Top Navigation Bar -->
-    <header class="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-40">
-        <div class="flex items-center space-x-3">
+    <header class="md:hidden h-16 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between sticky top-0 z-40 shrink-0">
+        <div class="flex items-center space-x-2.5">
             <span class="text-2xl">😈</span>
-            <span class="font-bold text-lg tracking-wider text-emerald-400">BSD<span class="text-white">Panel</span></span>
+            <span class="font-bold text-base tracking-wider text-emerald-400">BSD<span class="text-white">Panel</span></span>
         </div>
         <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none transition">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </button>
     </header>
 
@@ -66,18 +104,18 @@
     <div id="mobileBackdrop" class="fixed inset-0 bg-black/60 z-40 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
 
     <!-- Sidebar Navigation -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 min-h-screen">
-        <!-- Logo Brand -->
-        <div class="p-5 border-b border-slate-800 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <span class="text-3xl filter drop-shadow">😈</span>
-                <div>
-                    <h1 class="font-bold text-xl tracking-wide text-emerald-400">BSD<span class="text-slate-100">Panel</span></h1>
-                    <p class="text-xs text-slate-400 font-mono">FreeBSD Native</p>
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:relative md:translate-x-0 transition-all duration-200 ease-in-out flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 min-h-screen">
+        <!-- Logo Brand Header (Tinggi h-16 sama persis dengan navbar) -->
+        <div class="h-16 px-4 border-b border-slate-800 flex items-center justify-between sidebar-brand shrink-0">
+            <div class="flex items-center space-x-2.5 overflow-hidden">
+                <span class="text-2xl filter drop-shadow shrink-0">😈</span>
+                <div class="sidebar-text truncate">
+                    <h1 class="font-bold text-base tracking-wide text-emerald-400 leading-tight">BSD<span class="text-slate-100">Panel</span></h1>
+                    <p class="text-[10px] text-slate-400 font-mono leading-none">FreeBSD Native</p>
                 </div>
             </div>
-            <div class="flex items-center space-x-2">
-                <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">v1.0.0</span>
+            <div class="flex items-center space-x-1.5 sidebar-badge shrink-0">
+                <span class="px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">v1.0.0</span>
                 <!-- Mobile close button -->
                 <button id="mobileCloseBtn" class="md:hidden text-slate-400 hover:text-white p-1">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -86,66 +124,66 @@
         </div>
 
         <!-- Menu Links -->
-        <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
-            <div class="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Main Menu</div>
-            <a href="/" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "dashboard"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                <span>Dashboard</span>
+        <nav class="flex-1 p-3.5 space-y-1.5 overflow-y-auto">
+            <div class="sidebar-category px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Main Menu</div>
+            <a href="/" title="Dashboard" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "dashboard"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                <span class="sidebar-text truncate">Dashboard</span>
             </a>
 
-            <a href="/vhosts" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "vhosts"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
-                <span>Virtual Hosts</span>
+            <a href="/vhosts" title="Virtual Hosts" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "vhosts"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                <span class="sidebar-text truncate">Virtual Hosts</span>
             </a>
 
-            <a href="/databases" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "databases"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
-                <span>Database</span>
+            <a href="/databases" title="Database" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "databases"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-teal-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                <span class="sidebar-text truncate">Database</span>
             </a>
 
-            <a href="/files" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "files"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                <span>File Manager</span>
+            <a href="/files" title="File Manager" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "files"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-yellow-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                <span class="sidebar-text truncate">File Manager</span>
             </a>
 
-            <a href="/services" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "services"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                <span>FreeBSD Services</span>
+            <a href="/services" title="FreeBSD Services" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "services"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <span class="sidebar-text truncate">FreeBSD Services</span>
             </a>
 
-            <a href="/php" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "php"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                <span>PHP Management</span>
+            <a href="/php" title="PHP Management" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "php"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                <span class="sidebar-text truncate">PHP Management</span>
             </a>
 
-            <a href="/users" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "users"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
-                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                <span>Users / Akun</span>
+            <a href="/users" title="Users / Akun" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "users"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span class="sidebar-text truncate">Users / Akun</span>
             </a>
 
-            <div class="pt-4 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">System & Tools</div>
-            <div class="px-3 py-2 text-xs text-slate-500 flex items-center justify-between">
+            <div class="sidebar-category pt-3 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">System & Tools</div>
+            <div class="sidebar-footer-details px-3 py-1.5 text-xs text-slate-500 flex items-center justify-between">
                 <span>Kernel</span>
                 <span class="font-mono text-slate-300">GENERIC</span>
             </div>
-            <div class="px-3 py-2 text-xs text-slate-500 flex items-center justify-between">
+            <div class="sidebar-footer-details px-3 py-1.5 text-xs text-slate-500 flex items-center justify-between">
                 <span>File System</span>
                 <span class="font-mono text-emerald-400">OpenZFS</span>
             </div>
         </nav>
 
-        <!-- User Footer & Logout -->
-        <div class="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30 uppercase">
+        <!-- User Footer & Logout (Tinggi h-16 rapi) -->
+        <div class="sidebar-footer h-16 px-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between shrink-0">
+            <div class="flex items-center space-x-2.5 overflow-hidden">
+                <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30 uppercase shrink-0" title="{{if .Username}}{{.Username}}{{else}}pengelola{{end}}">
                     {{if .Username}}{{slice .Username 0 2}}{{else}}PG{{end}}
                 </div>
-                <div class="overflow-hidden">
+                <div class="sidebar-footer-details overflow-hidden">
                     <p class="text-xs font-semibold text-slate-200 truncate">{{if .Username}}{{.Username}}{{else}}pengelola{{end}}</p>
-                    <p class="text-[10px] text-emerald-400 font-mono">administrator</p>
+                    <p class="text-[10px] text-emerald-400 font-mono leading-none">administrator</p>
                 </div>
             </div>
-            <a href="/logout" title="Keluar" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition">
+            <a href="/logout" title="Keluar" class="sidebar-logout-btn p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition shrink-0">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </a>
         </div>
@@ -153,13 +191,22 @@
 
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <!-- Top Bar Header -->
-        <header class="bg-slate-900/60 backdrop-blur border-b border-slate-800 px-6 py-3.5 flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <h2 class="text-lg font-semibold text-white tracking-tight">{{.Title}}</h2>
-                <span class="hidden sm:inline-block px-2.5 py-0.5 text-xs font-medium bg-slate-800 text-slate-300 rounded-full border border-slate-700">
-                    FreeBSD Host
-                </span>
+        <!-- Top Bar Header (Tinggi h-16 sama persis dengan sidebar header) -->
+        <header class="h-16 bg-slate-900/60 backdrop-blur border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between shrink-0">
+            <div class="flex items-center space-x-3">
+                <!-- Hamburger Bars button on desktop/widescreen and mobile -->
+                <button id="sidebarToggleBtn" aria-label="Toggle Sidebar" title="Perkecil / Perluas Sidebar"
+                    class="p-2 -ml-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition focus:outline-none flex items-center justify-center shadow-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+                <div class="flex items-center space-x-3">
+                    <h2 class="text-base sm:text-lg font-semibold text-white tracking-tight">{{.Title}}</h2>
+                    <span class="hidden sm:inline-block px-2.5 py-0.5 text-xs font-medium bg-slate-800 text-slate-300 rounded-full border border-slate-700">
+                        FreeBSD Host
+                    </span>
+                </div>
             </div>
             <div class="flex items-center space-x-3 text-xs">
                 <div class="flex items-center space-x-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-md font-mono">
@@ -175,14 +222,15 @@
         </main>
     </div>
 
-    <!-- Script to toggle mobile sidebar -->
+    <!-- Script to toggle sidebar (desktop minimize & mobile drawer) -->
     <script>
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
         const mobileCloseBtn = document.getElementById('mobileCloseBtn');
         const sidebar = document.getElementById('sidebar');
         const backdrop = document.getElementById('mobileBackdrop');
+        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
 
-        function toggleSidebar(open) {
+        function toggleMobileSidebar(open) {
             if (open) {
                 sidebar.classList.remove('-translate-x-full');
                 backdrop.classList.remove('hidden');
@@ -192,14 +240,67 @@
             }
         }
 
+        // Toggle button on navbar (handles desktop minimize and mobile drawer)
+        if (sidebarToggleBtn) {
+            sidebarToggleBtn.addEventListener('click', () => {
+                if (window.innerWidth >= 768) {
+                    sidebar.classList.toggle('sidebar-collapsed');
+                    const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+                    localStorage.setItem('bsdpanel_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+                } else {
+                    const isClosed = sidebar.classList.contains('-translate-x-full');
+                    toggleMobileSidebar(isClosed);
+                }
+            });
+        }
+
         if (mobileMenuBtn) {
-            mobileMenuBtn.addEventListener('click', () => toggleSidebar(true));
+            mobileMenuBtn.addEventListener('click', () => toggleMobileSidebar(true));
         }
         if (mobileCloseBtn) {
-            mobileCloseBtn.addEventListener('click', () => toggleSidebar(false));
+            mobileCloseBtn.addEventListener('click', () => toggleMobileSidebar(false));
         }
         if (backdrop) {
-            backdrop.addEventListener('click', () => toggleSidebar(false));
+            backdrop.addEventListener('click', () => toggleMobileSidebar(false));
+        }
+
+        // Restore desktop collapsed state from localStorage
+        if (window.innerWidth >= 768 && localStorage.getItem('bsdpanel_sidebar_collapsed') === 'true') {
+            sidebar.classList.add('sidebar-collapsed');
+        }
+
+        // Global Toast Notification Helper
+        function showToast(message, type = 'info') {
+            let container = document.getElementById('globalToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'globalToastContainer';
+                container.className = 'fixed bottom-5 right-5 z-[999] flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4';
+                document.body.appendChild(container);
+            }
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto flex items-center space-x-2.5 px-4 py-3 rounded-xl border shadow-2xl text-xs font-medium transform transition-all duration-300 translate-y-4 opacity-0 backdrop-blur-md';
+            
+            if (type === 'success') {
+                toast.classList.add('bg-slate-900/95', 'border-emerald-500/40', 'text-emerald-300', 'shadow-emerald-950/50');
+                toast.innerHTML = `<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="break-words flex-1">${message}</span>`;
+            } else if (type === 'error') {
+                toast.classList.add('bg-slate-900/95', 'border-rose-500/40', 'text-rose-300', 'shadow-rose-950/50');
+                toast.innerHTML = `<svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg><span class="break-words flex-1">${message}</span>`;
+            } else {
+                toast.classList.add('bg-slate-900/95', 'border-indigo-500/40', 'text-indigo-300', 'shadow-indigo-950/50');
+                toast.innerHTML = `<svg class="w-4 h-4 text-indigo-400 shrink-0 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span class="break-words flex-1">${message}</span>`;
+            }
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
         }
     </script>
 

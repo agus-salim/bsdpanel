@@ -62,12 +62,12 @@ func (m *Manager) CreateOrUpdatePool(cfg PoolConfig) error {
 		return fmt.Errorf("gagal menulis file pool %s: %w", poolFilePath, err)
 	}
 
-	// Reload daemon php-fpm FreeBSD: `service php-fpm reload` atau `service php83-fpm reload`
-	serviceName := "php_fpm"
+	// Reload daemon php-fpm FreeBSD: coba service spesifik lalu fallback generic php_fpm
 	if cfg.PHPVersion != "" {
-		serviceName = fmt.Sprintf("%s_fpm", cfg.PHPVersion)
+		serviceName := fmt.Sprintf("%s_fpm", cfg.PHPVersion)
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "reload")
 	}
-	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "reload")
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "reload")
 	return nil
 }
 

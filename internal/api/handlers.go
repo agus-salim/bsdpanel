@@ -843,6 +843,67 @@ func (s *Server) handleAPIVHostUpdate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/vhosts?msg=Konfigurasi+web+server+dan+PHP+berhasil+diperbarui!", http.StatusSeeOther)
 }
 
+func (s *Server) handleAPIVHostSwitchPHP(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Form tidak valid"})
+		return
+	}
+
+	domain := strings.TrimSpace(r.FormValue("domain"))
+	phpVer := strings.TrimSpace(r.FormValue("php_version"))
+
+	if domain == "" || phpVer == "" {
+		s.respondJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Domain dan versi PHP wajib diisi"})
+		return
+	}
+
+	s.vhostsMu.Lock()
+	defer s.vhostsMu.Unlock()
+
+	var target *webserver.VHostConfig
+	for i := range s.vhostsList {
+		if strings.EqualFold(s.vhostsList[i].Domain, domain) {
+			target = &s.vhostsList[i]
+			break
+		}
+	}
+
+	if target == nil {
+		s.respondJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": fmt.Sprintf("Domain '%s' tidak ditemukan", domain)})
+		return
+	}
+
+	target.PHPVersion = phpVer
+	if phpVer != "" && phpVer != "none" {
+		target.HasPHP = true
+		target.PHPSocket = fmt.Sprintf("/var/run/%s-fpm-%s.sock", phpVer, target.User)
+		_ = s.phpMgr.CreateOrUpdatePool(php.PoolConfig{
+			User:              target.User,
+			PHPVersion:        phpVer,
+			MemoryLimit:       "256M",
+			UploadMaxFilesize: "64M",
+			MaxExecutionTime:  60,
+		})
+	} else {
+		target.HasPHP = false
+		target.PHPSocket = ""
+	}
+
+	if err := s.vhostMgr.CreateOrUpdate(target); err != nil {
+		s.respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+
+	s.saveVHosts()
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"message":     fmt.Sprintf("Versi PHP untuk domain %s berhasil dialihkan ke %s", domain, phpVer),
+		"domain":      domain,
+		"php_version": phpVer,
+	})
+}
+
 func (s *Server) handleAPIVHostDelete(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Form invalid", http.StatusBadRequest)
