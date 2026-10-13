@@ -26,6 +26,9 @@ chroot =
 chdir = /home/{{.User}}/public_html
 catch_workers_output = yes
 
+; Environment Variables
+{{if .PHPVersion}}env[PHP_INI_SCAN_DIR] = /usr/local/etc/{{.PHPVersion}}{{else}}env[PHP_INI_SCAN_DIR] = /usr/local/etc/php{{end}}
+
 ; PHP Direktif Kustom per User
 php_admin_value[memory_limit] = {{if .MemoryLimit}}{{.MemoryLimit}}{{else}}128M{{end}}
 php_admin_value[upload_max_filesize] = {{if .UploadMaxFilesize}}{{.UploadMaxFilesize}}{{else}}64M{{end}}

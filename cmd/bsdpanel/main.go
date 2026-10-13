@@ -183,6 +183,8 @@ pm.max_children = 10
 pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
+catch_workers_output = yes
+{{if .PHPVersion}}env[PHP_INI_SCAN_DIR] = /usr/local/etc/{{.PHPVersion}}{{end}}
 php_admin_value[memory_limit] = {{.MemoryLimit}}
 php_admin_value[upload_max_filesize] = {{.UploadMaxFilesize}}
 php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
@@ -196,6 +198,11 @@ php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
 	phpMgr, err := php.NewManager(cfg.PHPPoolDir, runner, phpPoolTmpl)
 	if err != nil {
 		log.Fatalf("[FATAL] Gagal inisialisasi PHP Pool Manager: %v", err)
+	}
+
+	// Pastikan daemon PHP-FPM spesifik versi aktif di FreeBSD
+	for _, vKey := range []string{"php82", "php83", "php84"} {
+		phpMgr.EnsureVersionFPMService(vKey)
 	}
 
 	// Buat server HTTP

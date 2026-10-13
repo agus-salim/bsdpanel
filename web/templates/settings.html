@@ -1,0 +1,189 @@
+{{define "content"}}
+<div class="space-y-6 max-w-3xl">
+
+    <!-- Header Section -->
+    <div>
+        <h3 class="text-base sm:text-lg font-bold text-white flex items-center space-x-2">
+            <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <span>Pengaturan Panel (Panel Setting)</span>
+        </h3>
+        <p class="text-xs text-slate-400 mt-1">Konfigurasi nama panel, domain khusus untuk akses panel, dan opsi enkripsi SSL Let's Encrypt.</p>
+    </div>
+
+    <!-- Flash Messages -->
+    {{if .FlashSuccess}}
+    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start space-x-3 text-xs text-emerald-400">
+        <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div class="space-y-0.5">
+            <span class="font-semibold block">Berhasil Diperbarui</span>
+            <span>{{.FlashSuccess}}</span>
+        </div>
+    </div>
+    {{end}}
+
+    {{if .FlashError}}
+    <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex items-start space-x-3 text-xs text-rose-400">
+        <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div class="space-y-0.5">
+            <span class="font-semibold block">Gagal Memperbarui</span>
+            <span>{{.FlashError}}</span>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Status Access Overview Card -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Direct IP Port Status -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-400 font-medium">Akses Direct Port (Fail-Safe)</span>
+                <span class="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[11px] font-semibold">Aktif</span>
+            </div>
+            <div class="font-mono text-xs text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800 truncate">
+                http://[IP-SERVER]:8080
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+                Selalu dapat diakses langsung tanpa bergantung pada DNS domain. Sangat aman saat pemeliharaan.
+            </p>
+        </div>
+
+        <!-- Custom Domain Status -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-400 font-medium">Domain Kustom Panel</span>
+                {{if .PanelDomain}}
+                    {{if .PanelSSL}}
+                    <span class="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[11px] font-semibold flex items-center space-x-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        <span>HTTPS (SSL Aktif)</span>
+                    </span>
+                    {{else}}
+                    <span class="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[11px] font-semibold">
+                        HTTP Only
+                    </span>
+                    {{end}}
+                {{else}}
+                    <span class="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[11px]">Belum Diatur</span>
+                {{end}}
+            </div>
+            <div class="font-mono text-xs text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800 truncate">
+                {{if .PanelDomain}}
+                    <a href="{{if .PanelSSL}}https{{else}}http{{end}}://{{.PanelDomain}}" target="_blank" class="text-emerald-400 hover:underline flex items-center space-x-1">
+                        <span>{{if .PanelSSL}}https{{else}}http{{end}}://{{.PanelDomain}}</span>
+                        <svg class="w-3.5 h-3.5 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                {{else}}
+                    <span class="text-slate-500">Tidak ada domain kustom aktif</span>
+                {{end}}
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+                Reverse proxy otomatis oleh Nginx ke port panel.
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Settings Form -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-sm space-y-6">
+        <form id="settingsForm" method="POST" action="/api/settings/save" class="space-y-6 text-xs">
+            
+            <!-- Nama Panel -->
+            <div>
+                <label for="panel_name" class="block text-slate-200 font-semibold mb-1.5 flex items-center space-x-1.5">
+                    <span>Nama Panel (Branding Title)</span>
+                    <span class="text-rose-400">*</span>
+                </label>
+                <div class="relative">
+                    <input type="text" id="panel_name" name="panel_name" required value="{{if .PanelName}}{{.PanelName}}{{else}}BSDPanel{{end}}"
+                        placeholder="Contoh: BSDPanel atau MTsN 1 SKD Panel"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                    Nama ini akan tampil di seluruh sidebar panel, judul header, halaman login, dan title bar browser.
+                </p>
+            </div>
+
+            <!-- Domain Panel -->
+            <div class="pt-4 border-t border-slate-800/80">
+                <label for="panel_domain" class="block text-slate-200 font-semibold mb-1.5 flex items-center space-x-1.5">
+                    <span>Domain Panel (Custom Domain)</span>
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 font-mono text-xs">
+                        http(s)://
+                    </div>
+                    <input type="text" id="panel_domain" name="panel_domain" value="{{.PanelDomain}}"
+                        placeholder="panel.domainanda.com"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-20 pr-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition font-mono">
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                    Masukkan domain atau subdomain yang ingin digunakan untuk membuka panel ini. Kosongkan jika ingin menonaktifkan domain reverse proxy panel.
+                </p>
+            </div>
+
+            <!-- Opsi Aktifkan SSL -->
+            <div class="pt-4 border-t border-slate-800/80">
+                <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 transition hover:border-slate-700">
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                        <div class="flex items-center h-5">
+                            <input type="checkbox" id="panel_ssl" name="panel_ssl" value="true" {{if .PanelSSL}}checked{{end}}
+                                class="w-4 h-4 text-emerald-500 bg-slate-900 border-slate-700 rounded focus:ring-emerald-500 focus:ring-2">
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-xs font-semibold text-slate-200 flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-emerald-400 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                                <span>Aktifkan SSL Otomatis Let's Encrypt (HTTPS)</span>
+                            </span>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                Menerbitkan sertifikat TLS/SSL gratis secara otomatis dari Let's Encrypt untuk domain panel ini, serta memaksa pengalihan otomatis dari HTTP ke HTTPS.
+                            </p>
+                            <p class="text-[10px] text-amber-400/90 leading-relaxed font-mono">
+                                * Catatan: DNS A Record domain harus sudah terarah ke IP server sebelum mencentang opsi ini.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Tombol Simpan -->
+            <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+                <span class="text-[11px] text-slate-500 font-mono">
+                    Konfigurasi tersimpan di: /usr/local/etc/bsdpanel/config.json
+                </span>
+                <button type="submit" id="saveBtn"
+                    class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold rounded-lg transition shadow-lg shadow-emerald-600/20 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span id="saveBtnText">Simpan Pengaturan</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Guidance & Best Practices Card -->
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-3">
+        <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-2">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>Petunjuk Konfigurasi Domain Panel</span>
+        </h4>
+        <ul class="text-xs text-slate-400 space-y-2 list-disc list-inside leading-relaxed">
+            <li><strong class="text-slate-300">A Record DNS:</strong> Pastikan domain atau subdomain panel (misal <code class="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">panel.domainanda.sch.id</code>) memiliki DNS Record <code class="text-cyan-400 bg-slate-950 px-1 py-0.5 rounded">A</code> yang mengarah ke IP publik VPS Anda.</li>
+            <li><strong class="text-slate-300">Penerbitan SSL:</strong> Jika Anda mencentang SSL, proses penerbitan Let's Encrypt dapat memakan waktu 5-15 detik. Harap tunggu hingga halaman selesai memuat.</li>
+            <li><strong class="text-slate-300">Port 8080 Tetap Terbuka:</strong> Sebagai pengaman (fail-safe), akses langsung via port 8080 tidak akan pernah dinonaktifkan sehingga Anda tidak akan terkunci di luar panel jika domain mengalami gangguan atau kedaluwarsa.</li>
+        </ul>
+    </div>
+
+</div>
+
+<script>
+    const form = document.getElementById('settingsForm');
+    const saveBtn = document.getElementById('saveBtn');
+    const saveBtnText = document.getElementById('saveBtnText');
+
+    if (form && saveBtn) {
+        form.addEventListener('submit', function() {
+            saveBtn.disabled = true;
+            saveBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            saveBtnText.innerText = 'Menyimpan & Menerapkan Konfigurasi...';
+        });
+    }
+</script>
+{{end}}

@@ -197,7 +197,7 @@ func (s *ServiceManager) InstallAndSetup(name string) (string, error) {
 	pkgMap := map[string]string{
 		"nginx":        "nginx",
 		"apache24":     "apache24",
-		"php_fpm":      "php83 php83-curl php83-mysqli php83-pdo_mysql php83-mbstring php83-zip php83-gd",
+		"php_fpm":      "php83 php83-pdo php83-curl php83-mysqli php83-pdo_mysql php83-pdo_pgsql php83-pgsql php83-mbstring php83-zip php83-gd",
 		"mysql-server": "mariadb1011-server",
 		"postgresql":   "postgresql16-server",
 	}
@@ -243,7 +243,7 @@ func (s *ServiceManager) SetAutostart(name string, enable bool) error {
 
 // GetAllManagedServices mengambil status layanan penting web hosting di FreeBSD.
 func (s *ServiceManager) GetAllManagedServices() ([]ServiceStatus, error) {
-	services := []string{"nginx", "apache24", "php_fpm", "mysql-server", "postgresql", "pf"}
+	services := []string{"nginx", "apache24", "php82_fpm", "php83_fpm", "php84_fpm", "php85_fpm", "mysql-server", "postgresql", "pf"}
 	var results []ServiceStatus
 
 	for _, svc := range services {
@@ -261,6 +261,14 @@ func getFriendlyLabel(name string) string {
 		return "Nginx Web Server"
 	case "apache24":
 		return "Apache HTTP Server"
+	case "php82_fpm":
+		return "PHP 8.2 FPM Daemon"
+	case "php83_fpm":
+		return "PHP 8.3 FPM Daemon"
+	case "php84_fpm":
+		return "PHP 8.4 FPM Daemon"
+	case "php85_fpm":
+		return "PHP 8.5 FPM Daemon"
 	case "php_fpm":
 		return "PHP-FPM Process Manager"
 	case "mysql-server":

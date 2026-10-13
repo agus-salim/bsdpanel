@@ -50,7 +50,7 @@ const defaultApacheTmpl = `# Apache 2.4 Virtual Host Managed by bsdpanel
 {{if .HasPHP}}
     # PHP-FPM FastCGI Handler via unix socket
     <FilesMatch "\.php$">
-        SetHandler "proxy:unix:{{.PHPSocket}}|fcgi://localhost/"
+        SetHandler "proxy:unix:{{.PHPSocket}}|fcgi://localhost"
     </FilesMatch>
 {{end}}
 

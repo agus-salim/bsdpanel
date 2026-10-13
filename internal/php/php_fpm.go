@@ -75,9 +75,9 @@ func (m *Manager) CreateOrUpdatePool(cfg PoolConfig) error {
 	}
 
 	// 2. Simpan di direktori pool versi spesifik (misal /usr/local/etc/php83-fpm.d)
-	targetDir := m.poolDir
-	if cfg.PHPVersion != "" {
-		targetDir = fmt.Sprintf("/usr/local/etc/%s-fpm.d", cfg.PHPVersion)
+	targetDir := fmt.Sprintf("/usr/local/etc/%s-fpm.d", cfg.PHPVersion)
+	if cfg.PHPVersion == "" {
+		targetDir = m.poolDir
 	}
 	_ = os.MkdirAll(targetDir, 0755)
 	targetFile := filepath.Join(targetDir, fmt.Sprintf("%s.conf", cfg.User))
@@ -88,7 +88,12 @@ func (m *Manager) CreateOrUpdatePool(cfg PoolConfig) error {
 	// 3. Restart daemon FPM versi spesifik
 	if cfg.PHPVersion != "" {
 		serviceName := fmt.Sprintf("%s_fpm", cfg.PHPVersion)
-		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "restart")
+		res, err := m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "restart")
+		if err != nil || res.ExitCode != 0 {
+			_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "start")
+		}
+	} else {
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "restart")
 	}
 
 	return nil

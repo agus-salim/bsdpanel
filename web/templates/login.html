@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - BSDPanel</title>
+    <title>Login - {{if .PanelName}}{{.PanelName}}{{else}}BSDPanel{{end}}</title>
     <!-- Google Fonts: Fira Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,7 +27,7 @@
                 <span class="text-4xl">😈</span>
             </div>
             <h1 class="text-2xl font-bold tracking-tight text-white">
-                BSD<span class="text-emerald-400">Panel</span>
+                {{if .PanelName}}{{.PanelName}}{{else}}BSD<span class="text-emerald-400">Panel</span>{{end}}
             </h1>
             <p class="text-xs text-slate-400 font-mono mt-1">FreeBSD Lightweight Web Hosting Control Panel</p>
         </div>

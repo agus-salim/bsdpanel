@@ -86,6 +86,7 @@ var CatalogExtensions = []ExtensionMeta{
 	{Name: "tokenizer", DisplayName: "Tokenizer", Description: "Parser token kode sumber PHP bawaan Zend", Category: "String"},
 
 	// Database
+	{Name: "pdo", DisplayName: "PDO Core", Description: "PHP Data Objects abstraction layer (pondasi wajib driver PDO)", Category: "Database"},
 	{Name: "mysqli", DisplayName: "MySQLi", Description: "Driver MySQL dan MariaDB modern bawaan PHP", Category: "Database"},
 	{Name: "pdo_mysql", DisplayName: "PDO MySQL", Description: "Driver PDO untuk database MySQL & MariaDB", Category: "Database"},
 	{Name: "pgsql", DisplayName: "PostgreSQL", Description: "Driver native untuk database PostgreSQL", Category: "Database"},
@@ -143,7 +144,6 @@ func (m *Manager) GetAvailableVersions() []PHPVersionInfo {
 		info.IniPath = m.resolveIniPath(item.Key, installed)
 
 		if installed {
-			m.EnsureVersionFPMService(item.Key)
 			info.FPMStatus = m.checkFPMStatus(item.Key, defaultVerKey)
 			exts, _ := m.GetExtensions(item.Key)
 			activeCount := 0
@@ -311,14 +311,15 @@ func (m *Manager) EnsureVersionFPMService(key string) {
 	// Pastikan ada minimal 1 pool agar daemon bisa start
 	wwwPool := filepath.Join(confDir, "www.conf")
 	if _, err := os.Stat(wwwPool); os.IsNotExist(err) {
-		poolContent := fmt.Sprintf("[www]\nuser = www\ngroup = www\nlisten = /var/run/%s-fpm.sock\nlisten.owner = www\nlisten.group = www\nlisten.mode = 0660\npm = dynamic\npm.max_children = 5\npm.start_servers = 1\npm.min_spare_servers = 1\npm.max_spare_servers = 3\n", key)
+		poolContent := fmt.Sprintf("[www]\nuser = www\ngroup = www\nlisten = /var/run/%s-fpm.sock\nlisten.owner = www\nlisten.group = www\nlisten.mode = 0660\npm = dynamic\npm.max_children = 5\npm.start_servers = 1\npm.min_spare_servers = 1\npm.max_spare_servers = 3\nenv[PHP_INI_SCAN_DIR] = /usr/local/etc/%s\n", key, key)
 		_ = os.WriteFile(wwwPool, []byte(poolContent), 0644)
 	}
 
-	// rc.d script
+	iniPath := m.resolveIniPath(key, true)
+
+	// rc.d script untuk daemon FPM versi spesifik
 	rcFile := fmt.Sprintf("/usr/local/etc/rc.d/%s_fpm", key)
-	if _, err := os.Stat(rcFile); os.IsNotExist(err) {
-		rcContent := fmt.Sprintf(`#!/bin/sh
+	rcContent := fmt.Sprintf(`#!/bin/sh
 # PROVIDE: %[1]s_fpm
 # REQUIRE: LOGIN
 # KEYWORD: shutdown
@@ -331,21 +332,24 @@ rcvar="%[1]s_fpm_enable"
 command="%[2]s"
 pidfile="/var/run/%[1]s-fpm.pid"
 required_files="%[3]s"
-%[1]s_fpm_flags="-y %[3]s -g \${pidfile}"
+%[1]s_fpm_flags="-y %[3]s -g /var/run/%[1]s-fpm.pid -c %[4]s"
 
-load_rc_config "\${name}"
-: \${%[1]s_fpm_enable:="YES"}
+# Pastikan PHP membaca konfigurasi modul dari direktori versi spesifik
+export PHP_INI_SCAN_DIR="/usr/local/etc/%[1]s"
 
-run_rc_command "\$1"
-`, key, binPath, confFile)
-		_ = os.WriteFile(rcFile, []byte(rcContent), 0755)
-	}
+load_rc_config "${name}"
+: ${%[1]s_fpm_enable:="YES"}
 
-	_, _ = m.runner.ExecWithTimeout(5*time.Second, "sysrc", "php_fpm_enable=NO")
-	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "stop")
+run_rc_command "$1"
+`, key, binPath, confFile, iniPath)
+	_ = os.WriteFile(rcFile, []byte(rcContent), 0755)
+
 	_, _ = m.runner.ExecWithTimeout(5*time.Second, "sysrc", fmt.Sprintf("%s_fpm_enable=YES", key))
 	if m.checkFPMStatus(key, "") != "running" {
-		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", key), "start")
+		resKey, errKey := m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", key), "restart")
+		if errKey != nil || resKey.ExitCode != 0 {
+			_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", key), "start")
+		}
 	}
 }
 
@@ -367,25 +371,26 @@ func (m *Manager) resolveIniPath(key string, installed bool) string {
 	return defaultIni
 }
 
+// resolveExtDirs mengembalikan folder penyimpanan file .ini ekstensi (versi spesifik dan default FreeBSD).
+func (m *Manager) resolveExtDirs(key string) []string {
+	var dirs []string
+	if key != "" {
+		dirs = append(dirs, fmt.Sprintf("/usr/local/etc/%s", key))
+	}
+	dirs = append(dirs, "/usr/local/etc/php")
+	return dirs
+}
+
 // resolveExtDir menentukan folder penyimpanan file .ini ekstensi.
 func (m *Manager) resolveExtDir(key string) string {
 	// 1. Cek folder versi khusus jika ada file .ini di dalamnya
 	versionDir := fmt.Sprintf("/usr/local/etc/%s", key)
-	if entries, err := os.ReadDir(versionDir); err == nil {
-		for _, e := range entries {
-			if strings.HasSuffix(e.Name(), ".ini") {
-				return versionDir
-			}
-		}
+	if entries, err := os.ReadDir(versionDir); err == nil && len(entries) > 0 {
+		return versionDir
 	}
 
 	// 2. Folder default FreeBSD untuk ekstensi PHP
-	defaultDir := "/usr/local/etc/php"
-	if _, err := os.Stat(defaultDir); err == nil {
-		return defaultDir
-	}
-
-	return defaultDir
+	return "/usr/local/etc/php"
 }
 
 // InstallVersion memasang paket PHP FreeBSD via pkg.
@@ -442,6 +447,7 @@ func (m *Manager) InstallVersion(key string) (string, error) {
 		fmt.Sprintf("%s-intl", key),
 		fmt.Sprintf("%s-fileinfo", key),
 		fmt.Sprintf("%s-curl", key),
+		fmt.Sprintf("%s-pdo", key),
 		fmt.Sprintf("%s-mysqli", key),
 		fmt.Sprintf("%s-pdo_mysql", key),
 		fmt.Sprintf("%s-pdo_pgsql", key),
@@ -449,13 +455,26 @@ func (m *Manager) InstallVersion(key string) (string, error) {
 		fmt.Sprintf("%s-zip", key),
 		fmt.Sprintf("%s-gd", key),
 		fmt.Sprintf("%s-mbstring", key),
-		fmt.Sprintf("%s-opcache", key),
+	}
+	// Di PHP 8.5 ke atas pada FreeBSD, OPcache telah disatukan ke core runtime PHP (built-in)
+	// dan port www/php85-opcache dihapus dari FreeBSD ports/pkg.
+	if key != "php85" {
+		pkgsToInstall = append(pkgsToInstall, fmt.Sprintf("%s-opcache", key))
 	}
 
 	args := append([]string{"install", "-y"}, pkgsToInstall...)
 	res, err := m.runner.ExecWithTimeout(180*time.Second, "pkg", args...)
 	if err != nil {
-		return res.Stderr, fmt.Errorf("pkg install gagal untuk %s: %s (%w)", key, res.Stderr, err)
+		// Fallback: Jika batch install gagal karena ada salah satu ekstensi yang tidak tersedia di repo pkg lokal,
+		// pasang core PHP terlebih dahulu agar runtime utama tetap terpasang, lalu pasang ekstensi secara best-effort.
+		resCore, errCore := m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", key)
+		if errCore != nil {
+			return res.Stderr, fmt.Errorf("pkg install gagal untuk %s: %s (%w)", key, res.Stderr, err)
+		}
+		for _, pkg := range pkgsToInstall[1:] {
+			_, _ = m.runner.ExecWithTimeout(60*time.Second, "pkg", "install", "-y", pkg)
+		}
+		res = resCore
 	}
 
 	// 4. Salin binary ke /usr/local/bin/<key> agar versi spesifik selalu tersedia di FreeBSD
@@ -480,6 +499,13 @@ func (m *Manager) InstallVersion(key string) (string, error) {
 				_ = os.WriteFile(dst, data, 0644)
 			}
 		}
+	}
+
+	// Untuk PHP 8.5, pastikan konfigurasi OPcache built-in aktif via opcache.enable=1 (tanpa zend_extension)
+	if key == "php85" {
+		opcacheContent := "[opcache]\nopcache.enable = 1\nopcache.enable_cli = 1\n"
+		_ = os.WriteFile(filepath.Join(keyExtDir, "ext-10-opcache.ini"), []byte(opcacheContent), 0644)
+		_ = os.WriteFile("/usr/local/etc/php/ext-10-opcache.ini", []byte(opcacheContent), 0644)
 	}
 
 	// 5. Pastikan php.ini tersedia
@@ -699,15 +725,23 @@ func (m *Manager) SaveRawIni(key, content string) error {
 
 // GetExtensions memeriksa status setiap ekstensi untuk versi PHP tertentu.
 func (m *Manager) GetExtensions(key string) ([]ExtensionInfo, error) {
-	extDir := m.resolveExtDir(key)
+	dirs := m.resolveExtDirs(key)
 	var list []ExtensionInfo
 
-	// Baca seluruh file di extDir
-	entries, _ := os.ReadDir(extDir)
-	filesMap := make(map[string]string) // nama lowercase -> nama file asli
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			filesMap[strings.ToLower(entry.Name())] = entry.Name()
+	// Baca seluruh file dari direktori versi spesifik dan direktori default FreeBSD
+	filesMap := make(map[string]string) // lowerName -> filePath
+	for _, d := range dirs {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				lower := strings.ToLower(entry.Name())
+				if _, exists := filesMap[lower]; !exists {
+					filesMap[lower] = filepath.Join(d, entry.Name())
+				}
+			}
 		}
 	}
 
@@ -720,52 +754,67 @@ func (m *Manager) GetExtensions(key string) ([]ExtensionInfo, error) {
 			PkgName:     fmt.Sprintf("%s-%s", key, meta.Name),
 			Status:      "not_installed",
 		}
+		if key == "php85" && meta.Name == "opcache" {
+			info.PkgName = "php85 (built-in)"
+		}
 
-		// Cari file ekstensi, misal `ext-20-curl.ini` atau `ext-30-pdo_mysql.ini`
-		var matchingIni string
-		var matchingSample string
-		var matchingDisabled string
+		// Cari file ekstensi, misal `ext-20-pdo.ini`, `ext-30-pdo_pgsql.ini`, atau `ext-20-curl.ini`
+		var matchingIniPath string
+		var matchingSamplePath string
+		var matchingDisabledPath string
 
-		for lowerName, origName := range filesMap {
-			// Periksa ekstensi nama file: ext-*-<name>.ini
+		for lowerName, fullPath := range filesMap {
 			if strings.Contains(lowerName, "-"+meta.Name+".ini") || lowerName == meta.Name+".ini" {
-				matchingIni = origName
+				matchingIniPath = fullPath
 			} else if strings.Contains(lowerName, "-"+meta.Name+".ini.sample") {
-				matchingSample = origName
+				matchingSamplePath = fullPath
 			} else if strings.Contains(lowerName, "-"+meta.Name+".ini.disabled") {
-				matchingDisabled = origName
+				matchingDisabledPath = fullPath
 			}
 		}
 
-		if matchingIni != "" {
-			info.IniFile = matchingIni
+		if matchingIniPath != "" {
+			info.IniFile = filepath.Base(matchingIniPath)
 			// Baca apakah baris extension di-comment out dengan titik koma (;)
-			iniPath := filepath.Join(extDir, matchingIni)
-			content, err := os.ReadFile(iniPath)
+			content, err := os.ReadFile(matchingIniPath)
 			if err == nil {
 				text := strings.TrimSpace(string(content))
 				if text != "" && !strings.HasPrefix(text, ";") {
-					info.Status = "active"
+					if key == "php85" && meta.Name == "opcache" && (strings.Contains(text, "opcache.enable=0") || strings.Contains(text, "opcache.enable = 0")) {
+						info.Status = "disabled"
+					} else {
+						info.Status = "active"
+					}
 				} else {
 					info.Status = "disabled"
 				}
 			} else {
 				info.Status = "active"
 			}
-		} else if matchingDisabled != "" || matchingSample != "" {
+		} else if matchingDisabledPath != "" || matchingSamplePath != "" {
 			info.Status = "disabled"
-			if matchingDisabled != "" {
-				info.IniFile = matchingDisabled
+			if matchingDisabledPath != "" {
+				info.IniFile = filepath.Base(matchingDisabledPath)
 			} else {
-				info.IniFile = matchingSample
+				info.IniFile = filepath.Base(matchingSamplePath)
 			}
 		} else {
-			// Cek apakah paket terpasang via pkg info
-			res, err := m.runner.ExecWithTimeout(3*time.Second, "pkg", "info", "-e", info.PkgName)
-			if err == nil && res.ExitCode == 0 {
-				info.Status = "disabled"
+			// Khusus PHP 8.5: OPcache merupakan modul built-in pada binary core php85 di FreeBSD
+			if key == "php85" && meta.Name == "opcache" {
+				installed, _, _ := m.checkInstalled(key, "")
+				if installed {
+					info.Status = "active"
+				} else {
+					info.Status = "not_installed"
+				}
 			} else {
-				info.Status = "not_installed"
+				// Cek apakah paket terpasang via pkg info
+				res, err := m.runner.ExecWithTimeout(3*time.Second, "pkg", "info", "-e", info.PkgName)
+				if err == nil && res.ExitCode == 0 {
+					info.Status = "disabled"
+				} else {
+					info.Status = "not_installed"
+				}
 			}
 		}
 
@@ -775,108 +824,240 @@ func (m *Manager) GetExtensions(key string) ([]ExtensionInfo, error) {
 	return list, nil
 }
 
-// ToggleExtension mengaktifkan atau menonaktifkan ekstensi PHP.
+// ToggleExtension mengaktifkan atau menonaktifkan ekstensi PHP dan menyinkronkan direktori konfigurasi.
 func (m *Manager) ToggleExtension(key, extName, action string) error {
-	extDir := m.resolveExtDir(key)
-	_ = os.MkdirAll(extDir, 0755)
+	// Jika mengaktifkan driver PDO (pdo_pgsql, pdo_mysql, pdo_sqlite), pastikan PDO Core juga aktif
+	if (action == "enable" || action == "aktifkan" || action == "install" || action == "pasang") && strings.HasPrefix(extName, "pdo_") {
+		_ = m.toggleExtensionInternal(key, "pdo", "enable")
+	}
 
-	entries, _ := os.ReadDir(extDir)
-	var existingIni string
-	var existingDisabled string
-	var existingSample string
+	if err := m.toggleExtensionInternal(key, extName, action); err != nil {
+		return err
+	}
 
-	for _, entry := range entries {
-		name := strings.ToLower(entry.Name())
-		if strings.Contains(name, "-"+extName+".ini") || name == extName+".ini" {
-			existingIni = entry.Name()
-		} else if strings.Contains(name, "-"+extName+".ini.disabled") {
-			existingDisabled = entry.Name()
-		} else if strings.Contains(name, "-"+extName+".ini.sample") {
-			existingSample = entry.Name()
-		}
+	// Restart PHP-FPM penuh agar modul .so terbaca oleh master process
+	m.RestartFPM(key)
+	return nil
+}
+
+func (m *Manager) toggleExtensionInternal(key, extName, action string) error {
+	dirs := m.resolveExtDirs(key)
+	for _, d := range dirs {
+		_ = os.MkdirAll(d, 0755)
+	}
+
+	// Penamaan file prioritas FreeBSD:
+	// ext-10-* untuk opcache
+	// ext-20-pdo.ini untuk PDO core (harus dimuat sebelum driver pdo_*)
+	// ext-30-pdo_*.ini untuk driver PDO
+	// ext-20-* untuk ekstensi reguler lainnya
+	iniFileName := fmt.Sprintf("ext-20-%s.ini", extName)
+	if extName == "pdo" {
+		iniFileName = "ext-20-pdo.ini"
+	} else if strings.HasPrefix(extName, "pdo_") {
+		iniFileName = fmt.Sprintf("ext-30-%s.ini", extName)
+	} else if extName == "opcache" {
+		iniFileName = "ext-10-opcache.ini"
+	}
+
+	directive := "extension"
+	if extName == "opcache" {
+		directive = "zend_extension"
 	}
 
 	switch action {
 	case "enable", "aktifkan":
-		if existingDisabled != "" {
-			// Rename .disabled menjadi .ini
-			src := filepath.Join(extDir, existingDisabled)
-			dest := filepath.Join(extDir, strings.TrimSuffix(existingDisabled, ".disabled"))
-			_ = os.Rename(src, dest)
-		} else if existingIni != "" {
-			// Uncomment baris jika ada ';'
-			iniPath := filepath.Join(extDir, existingIni)
-			content, err := os.ReadFile(iniPath)
-			if err == nil {
-				lines := strings.Split(string(content), "\n")
-				for i, l := range lines {
-					t := strings.TrimSpace(l)
-					if strings.HasPrefix(t, ";extension=") || strings.HasPrefix(t, ";zend_extension=") {
-						lines[i] = strings.TrimPrefix(t, ";")
+		if key == "php85" && extName == "opcache" {
+			for _, dir := range dirs {
+				entries, _ := os.ReadDir(dir)
+				for _, entry := range entries {
+					if strings.Contains(entry.Name(), "opcache.ini.disabled") {
+						src := filepath.Join(dir, entry.Name())
+						dest := filepath.Join(dir, strings.TrimSuffix(entry.Name(), ".disabled"))
+						_ = os.Rename(src, dest)
 					}
 				}
-				_ = os.WriteFile(iniPath, []byte(strings.Join(lines, "\n")), 0644)
+				newIni := filepath.Join(dir, "ext-10-opcache.ini")
+				content := "[opcache]\nopcache.enable = 1\nopcache.enable_cli = 1\n"
+				_ = os.WriteFile(newIni, []byte(content), 0644)
 			}
-		} else if existingSample != "" {
-			// Copy .sample menjadi .ini
-			src := filepath.Join(extDir, existingSample)
-			dest := filepath.Join(extDir, strings.TrimSuffix(existingSample, ".sample"))
-			data, err := os.ReadFile(src)
-			if err == nil {
-				_ = os.WriteFile(dest, data, 0644)
-			}
-		} else {
-			// Jika belum ada berkasnya sama sekali, buat baru atau install paketnya
-			pkgName := fmt.Sprintf("%s-%s", key, extName)
-			res, _ := m.runner.ExecWithTimeout(60*time.Second, "pkg", "install", "-y", pkgName)
-			_ = res
+			return nil
+		}
 
-			// Pastikan berkas .ini tercipta
-			newIni := filepath.Join(extDir, fmt.Sprintf("ext-20-%s.ini", extName))
-			if _, err := os.Stat(newIni); os.IsNotExist(err) {
-				directive := "extension"
-				if extName == "opcache" {
-					directive = "zend_extension"
+		for _, dir := range dirs {
+			entries, _ := os.ReadDir(dir)
+			var found string
+			var foundDisabled string
+			var foundSample string
+
+			for _, entry := range entries {
+				name := strings.ToLower(entry.Name())
+				if strings.Contains(name, "-"+extName+".ini") || name == extName+".ini" {
+					found = entry.Name()
+				} else if strings.Contains(name, "-"+extName+".ini.disabled") {
+					foundDisabled = entry.Name()
+				} else if strings.Contains(name, "-"+extName+".ini.sample") {
+					foundSample = entry.Name()
 				}
+			}
+
+			if foundDisabled != "" {
+				src := filepath.Join(dir, foundDisabled)
+				dest := filepath.Join(dir, strings.TrimSuffix(foundDisabled, ".disabled"))
+				_ = os.Rename(src, dest)
+			} else if foundSample != "" {
+				src := filepath.Join(dir, foundSample)
+				dest := filepath.Join(dir, strings.TrimSuffix(foundSample, ".sample"))
+				data, err := os.ReadFile(src)
+				if err == nil {
+					_ = os.WriteFile(dest, data, 0644)
+				}
+			} else if found != "" {
+				iniPath := filepath.Join(dir, found)
+				content, err := os.ReadFile(iniPath)
+				if err == nil {
+					lines := strings.Split(string(content), "\n")
+					for i, l := range lines {
+						t := strings.TrimSpace(l)
+						if strings.HasPrefix(t, ";extension=") || strings.HasPrefix(t, ";zend_extension=") {
+							lines[i] = strings.TrimPrefix(t, ";")
+						}
+					}
+					_ = os.WriteFile(iniPath, []byte(strings.Join(lines, "\n")), 0644)
+				}
+			} else {
+				// Buat file baru
+				newIni := filepath.Join(dir, iniFileName)
 				content := fmt.Sprintf("%s=%s.so\n", directive, extName)
 				_ = os.WriteFile(newIni, []byte(content), 0644)
 			}
 		}
 
 	case "disable", "nonaktifkan":
-		if existingIni != "" {
-			iniPath := filepath.Join(extDir, existingIni)
-			content, err := os.ReadFile(iniPath)
-			if err == nil {
-				lines := strings.Split(string(content), "\n")
-				for i, l := range lines {
-					t := strings.TrimSpace(l)
-					if strings.HasPrefix(t, "extension=") || strings.HasPrefix(t, "zend_extension=") {
-						lines[i] = ";" + t
+		if key == "php85" && extName == "opcache" {
+			for _, dir := range dirs {
+				entries, _ := os.ReadDir(dir)
+				for _, entry := range entries {
+					name := strings.ToLower(entry.Name())
+					if strings.Contains(name, "-opcache.ini") || name == "opcache.ini" {
+						src := filepath.Join(dir, entry.Name())
+						dest := src + ".disabled"
+						_ = os.Rename(src, dest)
 					}
 				}
-				_ = os.WriteFile(iniPath, []byte(strings.Join(lines, "\n")), 0644)
+				newIni := filepath.Join(dir, "ext-10-opcache.ini")
+				content := "[opcache]\nopcache.enable = 0\nopcache.enable_cli = 0\n"
+				_ = os.WriteFile(newIni, []byte(content), 0644)
+			}
+			return nil
+		}
+
+		for _, dir := range dirs {
+			entries, _ := os.ReadDir(dir)
+			for _, entry := range entries {
+				name := strings.ToLower(entry.Name())
+				if strings.Contains(name, "-"+extName+".ini") || name == extName+".ini" {
+					iniPath := filepath.Join(dir, entry.Name())
+					content, err := os.ReadFile(iniPath)
+					if err == nil {
+						lines := strings.Split(string(content), "\n")
+						for i, l := range lines {
+							t := strings.TrimSpace(l)
+							if strings.HasPrefix(t, "extension=") || strings.HasPrefix(t, "zend_extension=") {
+								lines[i] = ";" + t
+							}
+						}
+						_ = os.WriteFile(iniPath, []byte(strings.Join(lines, "\n")), 0644)
+					}
+				}
 			}
 		}
 
 	case "install", "pasang":
-		pkgName := fmt.Sprintf("%s-%s", key, extName)
-		_, err := m.runner.ExecWithTimeout(120*time.Second, "pkg", "install", "-y", pkgName)
+		if key == "php85" && extName == "opcache" {
+			// OPcache sudah built-in di php85 FreeBSD (tidak ada port www/php85-opcache)
+			for _, dir := range dirs {
+				newIni := filepath.Join(dir, "ext-10-opcache.ini")
+				content := "[opcache]\nopcache.enable = 1\nopcache.enable_cli = 1\n"
+				_ = os.WriteFile(newIni, []byte(content), 0644)
+			}
+			return nil
+		}
+
+		pkgs := []string{fmt.Sprintf("%s-%s", key, extName)}
+		if strings.HasPrefix(extName, "pdo_") {
+			pkgs = append(pkgs, fmt.Sprintf("%s-pdo", key))
+		}
+		if extName == "pdo_pgsql" {
+			pkgs = append(pkgs, fmt.Sprintf("%s-pgsql", key))
+		}
+
+		args := append([]string{"install", "-y"}, pkgs...)
+		_, err := m.runner.ExecWithTimeout(120*time.Second, "pkg", args...)
 		if err != nil {
 			return err
 		}
 
+		// Pastikan file .ini tercipta di semua direktori
+		for _, dir := range dirs {
+			newIni := filepath.Join(dir, iniFileName)
+			if _, err := os.Stat(newIni); os.IsNotExist(err) {
+				content := fmt.Sprintf("%s=%s.so\n", directive, extName)
+				_ = os.WriteFile(newIni, []byte(content), 0644)
+			}
+		}
+
+		// Jika driver PDO, pastikan ext-20-pdo.ini juga tercipta di semua direktori
+		if strings.HasPrefix(extName, "pdo_") {
+			for _, dir := range dirs {
+				pdoIni := filepath.Join(dir, "ext-20-pdo.ini")
+				if _, err := os.Stat(pdoIni); os.IsNotExist(err) {
+					_ = os.WriteFile(pdoIni, []byte("extension=pdo.so\n"), 0644)
+				}
+			}
+		}
+
 	case "uninstall", "hapus":
-		if existingIni != "" {
-			_ = os.Remove(filepath.Join(extDir, existingIni))
+		if key == "php85" && extName == "opcache" {
+			// OPcache bagian dari binary inti php85, matikan di berkas konfigurasi
+			for _, dir := range dirs {
+				entries, _ := os.ReadDir(dir)
+				for _, entry := range entries {
+					name := strings.ToLower(entry.Name())
+					if strings.Contains(name, "-opcache.ini") || name == "opcache.ini" {
+						_ = os.Remove(filepath.Join(dir, entry.Name()))
+					}
+				}
+				newIni := filepath.Join(dir, "ext-10-opcache.ini")
+				content := "[opcache]\nopcache.enable = 0\nopcache.enable_cli = 0\n"
+				_ = os.WriteFile(newIni, []byte(content), 0644)
+			}
+			return nil
+		}
+
+		for _, dir := range dirs {
+			entries, _ := os.ReadDir(dir)
+			for _, entry := range entries {
+				name := strings.ToLower(entry.Name())
+				if strings.Contains(name, "-"+extName+".ini") || name == extName+".ini" || strings.Contains(name, "-"+extName+".ini.disabled") {
+					_ = os.Remove(filepath.Join(dir, entry.Name()))
+				}
+			}
 		}
 		pkgName := fmt.Sprintf("%s-%s", key, extName)
 		_, _ = m.runner.ExecWithTimeout(60*time.Second, "pkg", "delete", "-y", pkgName)
 	}
 
-	// Reload PHP-FPM setelah perubahan ekstensi
-	m.ReloadFPM(key)
 	return nil
+}
+
+// RestartFPM me-restart service PHP-FPM FreeBSD untuk memuat ulang modul ekstensi .so.
+func (m *Manager) RestartFPM(key string) {
+	svcName := fmt.Sprintf("%s_fpm", key)
+	res, err := m.runner.ExecWithTimeout(10*time.Second, "service", svcName, "restart")
+	if err != nil || res.ExitCode != 0 {
+		_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", "php_fpm", "restart")
+	}
 }
 
 // ReloadFPM me-reload service PHP-FPM FreeBSD.

@@ -25,19 +25,29 @@ load_rc_config $name
 : ${bsdpanel_user:="root"}
 
 pidfile="/var/run/${name}.pid"
-procname="/usr/local/sbin/bsdpanel"
+child_pidfile="/var/run/${name}.child.pid"
 command="/usr/sbin/daemon"
-command_args="-c -r -f -p ${pidfile} ${procname} -config ${bsdpanel_config} -listen ${bsdpanel_listen}"
+command_args="-c -r -f -P ${pidfile} -p ${child_pidfile} /usr/local/sbin/bsdpanel -config ${bsdpanel_config} -listen ${bsdpanel_listen}"
 
 start_precmd="bsdpanel_prestart"
+stop_postcmd="bsdpanel_poststop"
 
 bsdpanel_prestart()
 {
     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+    if [ -f "/usr/local/sbin/bsdpanel.new" ]; then
+        chmod 755 /usr/local/sbin/bsdpanel.new
+        mv -f /usr/local/sbin/bsdpanel.new /usr/local/sbin/bsdpanel
+    fi
     if [ ! -d "/usr/local/etc/bsdpanel" ]; then
         mkdir -p /usr/local/etc/bsdpanel
         chmod 750 /usr/local/etc/bsdpanel
     fi
+}
+
+bsdpanel_poststop()
+{
+    rm -f ${pidfile} ${child_pidfile}
 }
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"

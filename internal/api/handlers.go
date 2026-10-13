@@ -25,6 +25,9 @@ type PageData struct {
 	Title        string
 	ActiveMenu   string
 	Username     string
+	PanelName    string
+	PanelDomain  string
+	PanelSSL     bool
 	Stats        *system.SystemStats
 	Services     []system.ServiceStatus
 	VHosts       []webserver.VHostConfig
@@ -57,6 +60,17 @@ func (s *Server) getUsername(r *http.Request) string {
 	return s.cfg.AdminUser
 }
 
+func (s *Server) basePageData(r *http.Request, title, activeMenu string) PageData {
+	return PageData{
+		Title:       title,
+		ActiveMenu:  activeMenu,
+		Username:    s.getUsername(r),
+		PanelName:   s.cfg.GetPanelName(),
+		PanelDomain: s.cfg.PanelDomain,
+		PanelSSL:    s.cfg.PanelSSL,
+	}
+}
+
 // Login & Auth Handlers
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +82,10 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := PageData{Title: "Login"}
+	data := PageData{
+		Title:     "Login",
+		PanelName: s.cfg.GetPanelName(),
+	}
 	if r.URL.Query().Get("error") == "invalid" {
 		data.Error = "Username atau password salah!"
 	}
@@ -112,13 +129,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	stats, _ := s.statsCol.GetStats()
 	services, _ := s.svcMgr.GetAllManagedServices()
 
-	data := PageData{
-		Title:      "Dashboard Metrik",
-		ActiveMenu: "dashboard",
-		Username:   s.getUsername(r),
-		Stats:      stats,
-		Services:   services,
-	}
+	data := s.basePageData(r, "Dashboard Metrik", "dashboard")
+	data.Stats = stats
+	data.Services = services
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["dashboard.html"].ExecuteTemplate(w, "layout", data)
@@ -131,14 +144,10 @@ func (s *Server) handleVHostsPage(w http.ResponseWriter, r *http.Request) {
 	vhosts := append([]webserver.VHostConfig{}, s.vhostsList...)
 	s.vhostsMu.RUnlock()
 
-	data := PageData{
-		Title:        "Virtual Hosts",
-		ActiveMenu:   "vhosts",
-		Username:     s.getUsername(r),
-		VHosts:       vhosts,
-		FlashSuccess: r.URL.Query().Get("msg"),
-		FlashError:   r.URL.Query().Get("err"),
-	}
+	data := s.basePageData(r, "Virtual Hosts", "vhosts")
+	data.VHosts = vhosts
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["vhosts.html"].ExecuteTemplate(w, "layout", data)
@@ -147,13 +156,9 @@ func (s *Server) handleVHostsPage(w http.ResponseWriter, r *http.Request) {
 // Users
 
 func (s *Server) handleUsersPage(w http.ResponseWriter, r *http.Request) {
-	data := PageData{
-		Title:        "Manajemen Pengguna",
-		ActiveMenu:   "users",
-		Username:     s.getUsername(r),
-		FlashSuccess: r.URL.Query().Get("msg"),
-		FlashError:   r.URL.Query().Get("err"),
-	}
+	data := s.basePageData(r, "Manajemen Pengguna", "users")
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["users.html"].ExecuteTemplate(w, "layout", data)
@@ -191,6 +196,72 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/users?msg=Username+dan+password+berhasil+diperbarui!", http.StatusSeeOther)
+}
+
+// Settings Handlers
+
+func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
+	data := s.basePageData(r, "Pengaturan Panel", "settings")
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = s.templates["settings.html"].ExecuteTemplate(w, "layout", data)
+}
+
+func (s *Server) handleAPISettingsSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/settings?err=Form+tidak+valid", http.StatusSeeOther)
+		return
+	}
+
+	panelName := strings.TrimSpace(r.FormValue("panel_name"))
+	if panelName == "" {
+		panelName = "BSDPanel"
+	}
+
+	rawDomain := strings.TrimSpace(r.FormValue("panel_domain"))
+	rawDomain = strings.TrimPrefix(rawDomain, "https://")
+	rawDomain = strings.TrimPrefix(rawDomain, "http://")
+	rawDomain = strings.TrimRight(rawDomain, "/")
+	domain := strings.ToLower(strings.TrimSpace(rawDomain))
+
+	sslRequested := r.FormValue("panel_ssl") == "true" || r.FormValue("panel_ssl") == "on" || r.FormValue("panel_ssl") == "1"
+
+	var sslActive bool
+	if domain != "" {
+		active, err := s.vhostMgr.ConfigurePanelProxy(domain, s.cfg.ListenAddr, sslRequested)
+		if err != nil {
+			if strings.Contains(err.Error(), "SSL Let's Encrypt gagal") {
+				_ = s.cfg.UpdatePanelSettings(panelName, domain, false)
+				errMsg := url.QueryEscape(fmt.Sprintf("Nama panel & domain berhasil disimpan, namun SSL gagal: %v", err))
+				http.Redirect(w, r, "/settings?err="+errMsg, http.StatusSeeOther)
+				return
+			}
+			errMsg := url.QueryEscape(fmt.Sprintf("Gagal mengonfigurasi reverse proxy domain panel: %v", err))
+			http.Redirect(w, r, "/settings?err="+errMsg, http.StatusSeeOther)
+			return
+		}
+		sslActive = active
+	} else {
+		_, _ = s.vhostMgr.ConfigurePanelProxy("", s.cfg.ListenAddr, false)
+		sslActive = false
+	}
+
+	if err := s.cfg.UpdatePanelSettings(panelName, domain, sslActive); err != nil {
+		http.Redirect(w, r, "/settings?err=Gagal+menyimpan+konfigurasi", http.StatusSeeOther)
+		return
+	}
+
+	msg := "Pengaturan panel berhasil disimpan!"
+	if domain != "" {
+		if sslActive {
+			msg = fmt.Sprintf("Pengaturan berhasil disimpan! Domain https://%s aktif dengan SSL.", domain)
+		} else {
+			msg = fmt.Sprintf("Pengaturan berhasil disimpan! Domain http://%s aktif.", domain)
+		}
+	}
+	http.Redirect(w, r, "/settings?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 // File Manager Handlers
@@ -247,16 +318,12 @@ func (s *Server) handleFilesPage(w http.ResponseWriter, r *http.Request) {
 		parentPath = filepath.Dir(currentPath)
 	}
 
-	data := PageData{
-		Title:        "File Manager",
-		ActiveMenu:   "files",
-		Username:     s.getUsername(r),
-		Files:        files,
-		CurrentPath:  currentPath,
-		ParentPath:   parentPath,
-		FlashSuccess: r.URL.Query().Get("msg"),
-		FlashError:   r.URL.Query().Get("err"),
-	}
+	data := s.basePageData(r, "File Manager", "files")
+	data.Files = files
+	data.CurrentPath = currentPath
+	data.ParentPath = parentPath
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["files.html"].ExecuteTemplate(w, "layout", data)
@@ -270,14 +337,10 @@ func (s *Server) handleFileEditPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := PageData{
-		Title:      "Edit Berkas",
-		ActiveMenu: "files",
-		Username:   s.getUsername(r),
-		FilePath:   targetPath,
-		Dir:        filepath.Dir(targetPath),
-		Content:    string(content),
-	}
+	data := s.basePageData(r, "Edit Berkas", "files")
+	data.FilePath = targetPath
+	data.Dir = filepath.Dir(targetPath)
+	data.Content = string(content)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["file_edit.html"].ExecuteTemplate(w, "layout", data)
@@ -590,28 +653,20 @@ func formatFileSize(bytes int64) string {
 func (s *Server) handleServicesPage(w http.ResponseWriter, r *http.Request) {
 	services, _ := s.svcMgr.GetAllManagedServices()
 
-	data := PageData{
-		Title:        "FreeBSD Services",
-		ActiveMenu:   "services",
-		Username:     s.getUsername(r),
-		Services:     services,
-		FlashSuccess: r.URL.Query().Get("msg"),
-		FlashError:   r.URL.Query().Get("err"),
-	}
+	data := s.basePageData(r, "FreeBSD Services", "services")
+	data.Services = services
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["services.html"].ExecuteTemplate(w, "layout", data)
 }
 
 func (s *Server) handlePHPPage(w http.ResponseWriter, r *http.Request) {
-	data := PageData{
-		Title:        "PHP Management",
-		ActiveMenu:   "php",
-		Username:     s.getUsername(r),
-		PHPVersions:  s.phpMgr.GetAvailableVersions(),
-		FlashSuccess: r.URL.Query().Get("msg"),
-		FlashError:   r.URL.Query().Get("err"),
-	}
+	data := s.basePageData(r, "PHP Management", "php")
+	data.PHPVersions = s.phpMgr.GetAvailableVersions()
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["php.html"].ExecuteTemplate(w, "layout", data)
@@ -1301,15 +1356,11 @@ func (s *Server) handleDatabasesPage(w http.ResponseWriter, r *http.Request) {
 	copy(vhosts, s.vhostsList)
 	s.vhostsMu.RUnlock()
 
-	data := PageData{
-		Title:        "Manajemen Database",
-		ActiveMenu:   "databases",
-		Username:     s.getUsername(r),
-		Databases:    dbs,
-		VHosts:       vhosts,
-		FlashSuccess: r.URL.Query().Get("msg"),
-		FlashError:   r.URL.Query().Get("err"),
-	}
+	data := s.basePageData(r, "Manajemen Database", "databases")
+	data.Databases = dbs
+	data.VHosts = vhosts
+	data.FlashSuccess = r.URL.Query().Get("msg")
+	data.FlashError = r.URL.Query().Get("err")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates["databases.html"].ExecuteTemplate(w, "layout", data)

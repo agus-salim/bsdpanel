@@ -234,6 +234,7 @@ func (s *Server) initTemplates() error {
 		"users.html",
 		"files.html",
 		"file_edit.html",
+		"settings.html",
 	}
 
 	for _, page := range pages {
@@ -278,6 +279,7 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("GET /services", s.handleServicesPage)
 	mux.HandleFunc("GET /php", s.handlePHPPage)
 	mux.HandleFunc("GET /users", s.handleUsersPage)
+	mux.HandleFunc("GET /settings", s.handleSettingsPage)
 
 	// REST / Form Action APIs
 	mux.HandleFunc("GET /api/stats", s.handleAPIStats)
@@ -307,6 +309,7 @@ func (s *Server) SetupRouter() http.Handler {
 	mux.HandleFunc("POST /api/files/upload", s.handleFileUpload)
 	mux.HandleFunc("POST /api/files/compress", s.handleFileCompress)
 	mux.HandleFunc("POST /api/files/extract", s.handleFileExtract)
+	mux.HandleFunc("POST /api/settings/save", s.handleAPISettingsSave)
 
 	return s.recoveryMiddleware(s.authMiddleware(s.loggingMiddleware(mux)))
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -13,15 +14,18 @@ import (
 type Config struct {
 	mu            sync.RWMutex `json:"-"`
 	FilePath      string       `json:"-"`
-	ListenAddr    string       `json:"listen_addr"`   // Default ":8080" atau ":2087"
-	SecretKey     string       `json:"secret_key"`    // JWT & Session secret key
-	AdminUser     string       `json:"admin_user"`    // Default "pengelola"
-	AdminPassword string       `json:"admin_password"`// Hashed password
-	DataDir       string       `json:"data_dir"`      // "/usr/local/etc/bsdpanel" di FreeBSD
-	VHostDir      string       `json:"vhost_dir"`     // "/usr/local/etc/nginx/conf.d"
-	PHPPoolDir    string       `json:"php_pool_dir"`  // "/usr/local/etc/php-fpm.d"
-	DefaultShell  string       `json:"default_shell"` // "/usr/sbin/nologin"
-	DemoMode      bool         `json:"demo_mode"`     // Mode simulasi jika di luar FreeBSD
+	PanelName     string       `json:"panel_name"`     // Nama kustom panel (default "BSDPanel")
+	PanelDomain   string       `json:"panel_domain"`   // Domain kustom panel, misal "panel.mtsn1sekadau.sch.id"
+	PanelSSL      bool         `json:"panel_ssl"`      // Opsi aktifkan SSL Let's Encrypt untuk domain panel
+	ListenAddr    string       `json:"listen_addr"`    // Default ":8080" atau ":2087"
+	SecretKey     string       `json:"secret_key"`     // JWT & Session secret key
+	AdminUser     string       `json:"admin_user"`     // Default "pengelola"
+	AdminPassword string       `json:"admin_password"` // Hashed password
+	DataDir       string       `json:"data_dir"`       // "/usr/local/etc/bsdpanel" di FreeBSD
+	VHostDir      string       `json:"vhost_dir"`      // "/usr/local/etc/nginx/conf.d"
+	PHPPoolDir    string       `json:"php_pool_dir"`   // "/usr/local/etc/php-fpm.d"
+	DefaultShell  string       `json:"default_shell"`  // "/usr/sbin/nologin"
+	DemoMode      bool         `json:"demo_mode"`      // Mode simulasi jika di luar FreeBSD
 }
 
 func HashPassword(password, salt string) string {
@@ -34,6 +38,9 @@ func HashPassword(password, salt string) string {
 func DefaultConfig() *Config {
 	salt := "change-me-bsdpanel-secure-key-32bytes!"
 	return &Config{
+		PanelName:     "BSDPanel",
+		PanelDomain:   "",
+		PanelSSL:      false,
 		ListenAddr:    ":8080",
 		SecretKey:     salt,
 		AdminUser:     "pengelola",
@@ -83,6 +90,32 @@ func (c *Config) VerifyPassword(password string) bool {
 	defer c.mu.RUnlock()
 	expectedHash := HashPassword(password, c.SecretKey)
 	return c.AdminPassword == expectedHash || c.AdminPassword == password
+}
+
+// GetPanelName mengembalikan nama panel kustom atau default BSDPanel.
+func (c *Config) GetPanelName() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.PanelName == "" {
+		return "BSDPanel"
+	}
+	return c.PanelName
+}
+
+// UpdatePanelSettings memperbarui nama panel, domain, dan opsi SSL.
+func (c *Config) UpdatePanelSettings(panelName, panelDomain string, panelSSL bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	pName := strings.TrimSpace(panelName)
+	if pName == "" {
+		pName = "BSDPanel"
+	}
+	c.PanelName = pName
+	c.PanelDomain = strings.TrimSpace(panelDomain)
+	c.PanelSSL = panelSSL
+
+	return c.saveUnlocked()
 }
 
 // UpdateCredentials memperbarui username dan password serta menyimpannya ke disk.

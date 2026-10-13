@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - BSDPanel FreeBSD Control Panel</title>
+    <title>{{.Title}} - {{if .PanelName}}{{.PanelName}}{{else}}BSDPanel{{end}} FreeBSD Control Panel</title>
     <!-- Google Fonts: Fira Sans & Fira Code -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -93,7 +93,7 @@
     <header class="md:hidden h-16 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between sticky top-0 z-40 shrink-0">
         <div class="flex items-center space-x-2.5">
             <span class="text-2xl">😈</span>
-            <span class="font-bold text-base tracking-wider text-emerald-400">BSD<span class="text-white">Panel</span></span>
+            <span class="font-bold text-base tracking-wider text-emerald-400">{{if .PanelName}}{{.PanelName}}{{else}}BSD<span class="text-white">Panel</span>{{end}}</span>
         </div>
         <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
@@ -110,7 +110,7 @@
             <div class="flex items-center space-x-2.5 overflow-hidden">
                 <span class="text-2xl filter drop-shadow shrink-0">😈</span>
                 <div class="sidebar-text truncate">
-                    <h1 class="font-bold text-base tracking-wide text-emerald-400 leading-tight">BSD<span class="text-slate-100">Panel</span></h1>
+                    <h1 class="font-bold text-base tracking-wide text-emerald-400 leading-tight">{{if .PanelName}}{{.PanelName}}{{else}}BSD<span class="text-slate-100">Panel</span>{{end}}</h1>
                     <p class="text-[10px] text-slate-400 font-mono leading-none">FreeBSD Native</p>
                 </div>
             </div>
@@ -159,6 +159,11 @@
             <a href="/users" title="Users / Akun" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "users"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
                 <svg class="w-5 h-5 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 <span class="sidebar-text truncate">Users / Akun</span>
+            </a>
+
+            <a href="/settings" title="Panel Setting" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{if eq .ActiveMenu "settings"}}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold{{else}}text-slate-300 hover:bg-slate-800 hover:text-white{{end}}">
+                <svg class="w-5 h-5 text-pink-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span class="sidebar-text truncate">Panel Setting</span>
             </a>
 
             <div class="sidebar-category pt-3 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">System & Tools</div>
