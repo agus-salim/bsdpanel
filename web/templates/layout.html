@@ -194,9 +194,9 @@
         <!-- Top Bar Header (Tinggi h-16 sama persis dengan sidebar header) -->
         <header class="h-16 bg-slate-900/60 backdrop-blur border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between shrink-0">
             <div class="flex items-center space-x-3">
-                <!-- Hamburger Bars button on desktop/widescreen and mobile -->
+                <!-- Hamburger Bars button on desktop/widescreen (hidden di layar kecil/mobile agar tidak dobel dengan tombol di pojok kanan atas) -->
                 <button id="sidebarToggleBtn" aria-label="Toggle Sidebar" title="Perkecil / Perluas Sidebar"
-                    class="p-2 -ml-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition focus:outline-none flex items-center justify-center shadow-sm">
+                    class="hidden md:flex p-2 -ml-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 transition focus:outline-none items-center justify-center shadow-sm">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
