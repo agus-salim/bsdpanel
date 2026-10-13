@@ -143,6 +143,7 @@ func (m *Manager) GetAvailableVersions() []PHPVersionInfo {
 		info.IniPath = m.resolveIniPath(item.Key, installed)
 
 		if installed {
+			m.EnsureVersionFPMService(item.Key)
 			info.FPMStatus = m.checkFPMStatus(item.Key, defaultVerKey)
 			exts, _ := m.GetExtensions(item.Key)
 			activeCount := 0
@@ -260,6 +261,18 @@ func (m *Manager) checkFPMStatus(key string, defaultVerKey string) string {
 		return "running"
 	}
 
+	// Cek juga lewat file PID
+	pidFile := fmt.Sprintf("/var/run/%s-fpm.pid", key)
+	if data, err := os.ReadFile(pidFile); err == nil {
+		pidStr := strings.TrimSpace(string(data))
+		if pidStr != "" {
+			resKill, errKill := m.runner.ExecWithTimeout(5*time.Second, "kill", "-0", pidStr)
+			if errKill == nil && resKill.ExitCode == 0 {
+				return "running"
+			}
+		}
+	}
+
 	// Jika ini versi default, coba cek `service php_fpm status`
 	if defaultVerKey == key || defaultVerKey == "" {
 		resDefault, errDefault := m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "status")
@@ -269,6 +282,69 @@ func (m *Manager) checkFPMStatus(key string, defaultVerKey string) string {
 	}
 
 	return "stopped"
+}
+
+// EnsureVersionFPMService memastikan konfigurasi FPM, pool directory, dan service rc.d ada dan aktif untuk versi ini.
+func (m *Manager) EnsureVersionFPMService(key string) {
+	binPath := fmt.Sprintf("/usr/local/sbin/%s-fpm", key)
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		// Jika belum ada bin spesifik tapi ada php-fpm default
+		defBin := "/usr/local/sbin/php-fpm"
+		if _, defErr := os.Stat(defBin); defErr == nil {
+			if data, readErr := os.ReadFile(defBin); readErr == nil {
+				_ = os.WriteFile(binPath, data, 0755)
+			}
+		} else {
+			return
+		}
+	}
+
+	confDir := fmt.Sprintf("/usr/local/etc/%s-fpm.d", key)
+	_ = os.MkdirAll(confDir, 0755)
+
+	confFile := fmt.Sprintf("/usr/local/etc/%s-fpm.conf", key)
+	if _, err := os.Stat(confFile); os.IsNotExist(err) {
+		confContent := fmt.Sprintf("[global]\npid = /var/run/%s-fpm.pid\nerror_log = /var/log/%s-fpm.log\ninclude = %s/*.conf\n", key, key, confDir)
+		_ = os.WriteFile(confFile, []byte(confContent), 0644)
+	}
+
+	// Pastikan ada minimal 1 pool agar daemon bisa start
+	wwwPool := filepath.Join(confDir, "www.conf")
+	if _, err := os.Stat(wwwPool); os.IsNotExist(err) {
+		poolContent := fmt.Sprintf("[www]\nuser = www\ngroup = www\nlisten = /var/run/%s-fpm.sock\nlisten.owner = www\nlisten.group = www\nlisten.mode = 0660\npm = dynamic\npm.max_children = 5\npm.start_servers = 1\npm.min_spare_servers = 1\npm.max_spare_servers = 3\n", key)
+		_ = os.WriteFile(wwwPool, []byte(poolContent), 0644)
+	}
+
+	// rc.d script
+	rcFile := fmt.Sprintf("/usr/local/etc/rc.d/%s_fpm", key)
+	if _, err := os.Stat(rcFile); os.IsNotExist(err) {
+		rcContent := fmt.Sprintf(`#!/bin/sh
+# PROVIDE: %[1]s_fpm
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="%[1]s_fpm"
+rcvar="%[1]s_fpm_enable"
+
+command="%[2]s"
+pidfile="/var/run/%[1]s-fpm.pid"
+required_files="%[3]s"
+%[1]s_fpm_flags="-y %[3]s -g \${pidfile}"
+
+load_rc_config "\${name}"
+: \${%[1]s_fpm_enable:="YES"}
+
+run_rc_command "\$1"
+`, key, binPath, confFile)
+		_ = os.WriteFile(rcFile, []byte(rcContent), 0755)
+	}
+
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "sysrc", fmt.Sprintf("%s_fpm_enable=YES", key))
+	if m.checkFPMStatus(key, "") != "running" {
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", fmt.Sprintf("%s_fpm", key), "start")
+	}
 }
 
 // resolveIniPath menentukan jalur php.ini yang sesuai.
@@ -421,7 +497,8 @@ func (m *Manager) InstallVersion(key string) (string, error) {
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "sysrc", fmt.Sprintf("%s=YES", svcKey))
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "sysrc", "php_fpm_enable=YES")
 
-	// 7. Restart FPM service
+	// 7. Restart FPM service & aktifkan daemon versi spesifik
+	m.EnsureVersionFPMService(key)
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", "php_fpm", "restart")
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", fmt.Sprintf("%s_fpm", key), "restart")
 
@@ -435,9 +512,12 @@ func (m *Manager) UninstallVersion(key string) (string, error) {
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "service", svcName, "stop")
 	_, _ = m.runner.ExecWithTimeout(10*time.Second, "sysrc", fmt.Sprintf("%s_fpm_enable=NO", key))
 
-	// Hapus binary khusus dan folder ekstensi
+	// Hapus binary khusus, rc script, konfigurasi FPM, dan folder ekstensi
 	_ = os.Remove(fmt.Sprintf("/usr/local/bin/%s", key))
 	_ = os.Remove(fmt.Sprintf("/usr/local/sbin/%s-fpm", key))
+	_ = os.Remove(fmt.Sprintf("/usr/local/etc/rc.d/%s_fpm", key))
+	_ = os.Remove(fmt.Sprintf("/usr/local/etc/%s-fpm.conf", key))
+	_ = os.RemoveAll(fmt.Sprintf("/usr/local/etc/%s-fpm.d", key))
 	_ = os.RemoveAll(fmt.Sprintf("/usr/local/etc/%s", key))
 
 	// Jika ini versi yang sedang terpasang aktif di sistem FreeBSD, hapus via pkg

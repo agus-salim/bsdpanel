@@ -55,11 +55,19 @@ func (m *Manager) CreateOrUpdatePool(cfg PoolConfig) error {
 		return fmt.Errorf("gagal render template pool: %w", err)
 	}
 
+	// 1. Simpan di direktori pool generic (default /usr/local/etc/php-fpm.d)
 	_ = os.MkdirAll(m.poolDir, 0755)
 	poolFilePath := filepath.Join(m.poolDir, fmt.Sprintf("%s.conf", cfg.User))
-
 	if err := os.WriteFile(poolFilePath, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("gagal menulis file pool %s: %w", poolFilePath, err)
+	}
+
+	// 2. Simpan juga di direktori pool versi spesifik (misal /usr/local/etc/php83-fpm.d)
+	if cfg.PHPVersion != "" {
+		versionPoolDir := fmt.Sprintf("/usr/local/etc/%s-fpm.d", cfg.PHPVersion)
+		_ = os.MkdirAll(versionPoolDir, 0755)
+		versionPoolFile := filepath.Join(versionPoolDir, fmt.Sprintf("%s.conf", cfg.User))
+		_ = os.WriteFile(versionPoolFile, buf.Bytes(), 0644)
 	}
 
 	// Reload daemon php-fpm FreeBSD: coba service spesifik lalu fallback generic php_fpm
@@ -76,10 +84,16 @@ func (m *Manager) DeletePool(user, phpVersion string) error {
 	poolFilePath := filepath.Join(m.poolDir, fmt.Sprintf("%s.conf", user))
 	_ = os.Remove(poolFilePath)
 
+	if phpVersion != "" {
+		versionPoolFile := filepath.Join(fmt.Sprintf("/usr/local/etc/%s-fpm.d", phpVersion), fmt.Sprintf("%s.conf", user))
+		_ = os.Remove(versionPoolFile)
+	}
+
 	serviceName := "php_fpm"
 	if phpVersion != "" {
 		serviceName = fmt.Sprintf("%s_fpm", phpVersion)
+		_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "reload")
 	}
-	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", serviceName, "reload")
+	_, _ = m.runner.ExecWithTimeout(5*time.Second, "service", "php_fpm", "reload")
 	return nil
 }
